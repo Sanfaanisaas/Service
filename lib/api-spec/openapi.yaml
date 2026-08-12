@@ -10,6 +10,15 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: dashboard
+  - name: customers
+  - name: charging
+  - name: workspace
+  - name: inventory
+  - name: sales
+  - name: transactions
+  - name: receipts
+  - name: history
 paths:
   /healthz:
     get:
@@ -24,7 +33,328 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get the operational dashboard summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+  /customers:
+    get:
+      operationId: listCustomers
+      tags: [customers]
+      summary: List customers
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Customer list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Customer"
+    post:
+      operationId: createCustomer
+      tags: [customers]
+      summary: Create a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerInput"
+      responses:
+        "201":
+          description: Created customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+  /charging:
+    get:
+      operationId: listChargingSessions
+      tags: [charging]
+      summary: List active charging sessions
+      responses:
+        "200":
+          description: Charging sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChargingSession"
+  /charging/check-in:
+    post:
+      operationId: checkInChargingSession
+      tags: [charging]
+      summary: Check a device into charging
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChargingCheckInInput"
+      responses:
+        "201":
+          description: Charging session and receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChargingCheckInResult"
+        "409":
+          description: Capacity reached or slot conflict
+  /charging/{id}/status:
+    patch:
+      operationId: updateChargingStatus
+      tags: [charging]
+      summary: Update a charging session status
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChargingStatusInput"
+      responses:
+        "200":
+          description: Updated charging session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChargingSession"
+  /charging/{id}/collect:
+    post:
+      operationId: collectChargingSession
+      tags: [charging]
+      summary: Verify and collect a device
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChargingCollectInput"
+      responses:
+        "200":
+          description: Collected charging session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChargingSession"
+  /workspace:
+    get:
+      operationId: listWorkspaceBookings
+      tags: [workspace]
+      summary: List current workspace bookings
+      responses:
+        "200":
+          description: Workspace bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkspaceBooking"
+  /workspace/register:
+    post:
+      operationId: registerWorkspaceBooking
+      tags: [workspace]
+      summary: Register a workspace user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceBookingInput"
+      responses:
+        "201":
+          description: Registered workspace booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceBooking"
+        "409":
+          description: Workspace capacity reached
+  /workspace/{id}/check-in:
+    post:
+      operationId: checkInWorkspaceBooking
+      tags: [workspace]
+      summary: Check a workspace user in
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Checked-in booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceBooking"
+  /workspace/{id}/check-out:
+    post:
+      operationId: checkOutWorkspaceBooking
+      tags: [workspace]
+      summary: Check a workspace user out
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Checked-out booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceBooking"
+  /products:
+    get:
+      operationId: listProducts
+      tags: [inventory]
+      summary: List inventory products
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+    post:
+      operationId: createProduct
+      tags: [inventory]
+      summary: Create a product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+  /sales:
+    get:
+      operationId: listSales
+      tags: [sales]
+      summary: List recent sales
+      responses:
+        "200":
+          description: Sale list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sale"
+    post:
+      operationId: createSale
+      tags: [sales]
+      summary: Create a multi-item sale
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaleInput"
+      responses:
+        "201":
+          description: Created sale
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaleResult"
+        "409":
+          description: Insufficient inventory
+  /transactions:
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      summary: List ledger transactions
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [today, yesterday, week, month]
+      responses:
+        "200":
+          description: Transaction list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+  /receipts:
+    get:
+      operationId: listReceipts
+      tags: [receipts]
+      summary: List recent receipts
+      responses:
+        "200":
+          description: Receipt list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Receipt"
+  /history:
+    get:
+      operationId: listHistory
+      tags: [history]
+      summary: List daily operational history
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [all, charging, workspace, sales, transactions]
+      responses:
+        "200":
+          description: Operational history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoryResponse"
 components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +363,274 @@ components:
           type: string
       required:
         - status
+    Customer:
+      type: object
+      required: [id, name, whatsappOptIn, notificationPreferences, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        phone: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        whatsappOptIn: { type: boolean }
+        notificationPreferences:
+          $ref: "#/components/schemas/NotificationPreferences"
+        createdAt: { type: string, format: date-time }
+    CustomerInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 2 }
+        phone: { type: string }
+        email: { type: string }
+        whatsappOptIn: { type: boolean }
+        notificationPreferences:
+          $ref: "#/components/schemas/NotificationPreferences"
+    NotificationPreferences:
+      type: object
+      required: [push, inApp]
+      properties:
+        push: { type: boolean }
+        inApp: { type: boolean }
+    Product:
+      type: object
+      required: [id, sku, name, category, costPrice, sellingPrice, quantityOnHand, reorderThreshold, active, updatedAt]
+      properties:
+        id: { type: string }
+        sku: { type: string }
+        name: { type: string }
+        description: { type: ["string", "null"] }
+        category: { type: string }
+        costPrice: { type: number }
+        sellingPrice: { type: number }
+        quantityOnHand: { type: number }
+        reorderThreshold: { type: number }
+        active: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+    ProductInput:
+      type: object
+      required: [sku, name, category, costPrice, sellingPrice, quantityOnHand, reorderThreshold]
+      properties:
+        sku: { type: string, minLength: 2 }
+        name: { type: string, minLength: 2 }
+        description: { type: string }
+        category: { type: string }
+        costPrice: { type: number, minimum: 0 }
+        sellingPrice: { type: number, minimum: 0 }
+        quantityOnHand: { type: number, minimum: 0 }
+        reorderThreshold: { type: number, minimum: 0 }
+    ChargingSession:
+      type: object
+      required: [id, customerId, customerName, publicSessionId, device, slotNumber, timeIn, status, amount, paymentStatus]
+      properties:
+        id: { type: string }
+        customerId: { type: string }
+        customerName: { type: string }
+        publicSessionId: { type: string }
+        device:
+          $ref: "#/components/schemas/Device"
+        slotNumber: { type: number }
+        timeIn: { type: string, format: date-time }
+        estimatedReadyAt: { type: ["string", "null"], format: date-time }
+        readyAt: { type: ["string", "null"], format: date-time }
+        collectedAt: { type: ["string", "null"], format: date-time }
+        status:
+          type: string
+          enum: [checked-in, charging, ready, collected, cancelled]
+        amount: { type: number }
+        paymentStatus:
+          type: string
+          enum: [pending, paid]
+        paymentMethod: { type: string }
+    Device:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [phone, laptop, tablet, powerbank, other]
+        brand: { type: ["string", "null"] }
+        model: { type: ["string", "null"] }
+        color: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+    ChargingCheckInInput:
+      type: object
+      required: [customerName, phone, deviceType, expectedMinutes, amount, paymentMethod]
+      properties:
+        customerName: { type: string, minLength: 2 }
+        phone: { type: string, minLength: 7 }
+        deviceType:
+          type: string
+          enum: [phone, laptop, tablet, powerbank, other]
+        brand: { type: string }
+        model: { type: string }
+        color: { type: string }
+        description: { type: string }
+        expectedMinutes: { type: number, minimum: 1, maximum: 1440 }
+        amount: { type: number, minimum: 0 }
+        paymentMethod:
+          type: string
+          enum: [cash, transfer, card, other]
+    ChargingCheckInResult:
+      type: object
+      required: [session, receipt]
+      properties:
+        session: { $ref: "#/components/schemas/ChargingSession" }
+        receipt: { $ref: "#/components/schemas/Receipt" }
+    ChargingStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [checked-in, charging, ready, cancelled]
+    ChargingCollectInput:
+      type: object
+      required: [claimId]
+      properties:
+        claimId: { type: string, minLength: 8 }
+    WorkspaceBooking:
+      type: object
+      required: [id, customerId, customerName, status, createdAt]
+      properties:
+        id: { type: string }
+        customerId: { type: string }
+        customerName: { type: string }
+        phone: { type: ["string", "null"] }
+        deviceInfo: { $ref: "#/components/schemas/DeviceInfo" }
+        timeIn: { type: ["string", "null"], format: date-time }
+        timeOut: { type: ["string", "null"], format: date-time }
+        amount: { type: number }
+        status:
+          type: string
+          enum: [registered, checked-in, checked-out, cancelled]
+        createdAt: { type: string, format: date-time }
+    DeviceInfo:
+      type: object
+      properties:
+        type: { type: string }
+        brand: { type: string }
+        model: { type: string }
+    WorkspaceBookingInput:
+      type: object
+      required: [customerName, phone]
+      properties:
+        customerName: { type: string, minLength: 2 }
+        phone: { type: string, minLength: 7 }
+        email: { type: string }
+        deviceInfo: { $ref: "#/components/schemas/DeviceInfo" }
+        amount: { type: number, minimum: 0 }
+        whatsappOptIn: { type: boolean }
+    Sale:
+      type: object
+      required: [id, total, paymentMethod, itemCount, createdAt]
+      properties:
+        id: { type: string }
+        customerId: { type: ["string", "null"] }
+        itemCount: { type: number }
+        total: { type: number }
+        paymentMethod: { type: string }
+        createdAt: { type: string, format: date-time }
+    SaleInput:
+      type: object
+      required: [items, paymentMethod]
+      properties:
+        customerId: { type: string }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [productId, quantity]
+            properties:
+              productId: { type: string }
+              quantity: { type: number, minimum: 1 }
+        paymentMethod:
+          type: string
+          enum: [cash, transfer, card, other]
+    SaleResult:
+      type: object
+      required: [sale, receipt]
+      properties:
+        sale: { $ref: "#/components/schemas/Sale" }
+        receipt: { $ref: "#/components/schemas/Receipt" }
+    Transaction:
+      type: object
+      required: [id, type, amount, direction, paymentMethod, description, createdAt]
+      properties:
+        id: { type: string }
+        type: { type: string }
+        amount: { type: number }
+        direction: { type: string, enum: [income, expense] }
+        paymentMethod: { type: string }
+        description: { type: string }
+        createdAt: { type: string, format: date-time }
+    Receipt:
+      type: object
+      required: [id, receiptNumber, type, subtotal, total, paymentMethod, generatedAt]
+      properties:
+        id: { type: string }
+        receiptNumber: { type: string }
+        type: { type: string, enum: [sale, charging, workspace] }
+        customerName: { type: ["string", "null"] }
+        referenceId: { type: string }
+        claimId: { type: ["string", "null"] }
+        subtotal: { type: number }
+        total: { type: number }
+        paymentMethod: { type: string }
+        generatedAt: { type: string, format: date-time }
+    DashboardSummary:
+      type: object
+      required: [todayRevenue, charging, workspace, lowStockCount, todayCustomers, recentTransactions, readySessions, lowStockProducts]
+      properties:
+        todayRevenue: { type: number }
+        charging:
+          type: object
+          required: [active, capacity, available]
+          properties:
+            active: { type: number }
+            capacity: { type: number }
+            available: { type: number }
+        workspace:
+          type: object
+          required: [occupied, capacity, available]
+          properties:
+            occupied: { type: number }
+            capacity: { type: number }
+            available: { type: number }
+        lowStockCount: { type: number }
+        todayCustomers: { type: number }
+        recentTransactions:
+          type: array
+          items: { $ref: "#/components/schemas/Transaction" }
+        readySessions:
+          type: array
+          items: { $ref: "#/components/schemas/ChargingSession" }
+        lowStockProducts:
+          type: array
+          items: { $ref: "#/components/schemas/Product" }
+    HistoryResponse:
+      type: object
+      required: [date, summary, transactions, charging, workspace, sales]
+      properties:
+        date: { type: string, format: date }
+        summary:
+          type: object
+          required: [chargingCount, workspaceCount, salesCount, revenue]
+          properties:
+            chargingCount: { type: number }
+            workspaceCount: { type: number }
+            salesCount: { type: number }
+            revenue: { type: number }
+        transactions:
+          type: array
+          items: { $ref: "#/components/schemas/Transaction" }
+        charging:
+          type: array
+          items: { $ref: "#/components/schemas/ChargingSession" }
+        workspace:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceBooking" }
+        sales:
+          type: array
+          items: { $ref: "#/components/schemas/Sale" }
 
