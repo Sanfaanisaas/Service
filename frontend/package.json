@@ -1,0 +1,9 @@
+{
+  "name": "@workspace/frontend",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter \"./**\" --parallel run dev",
+    "build": "pnpm --filter \"./**\" run build",
+    "typecheck": "pnpm --filter \"./**\" run typecheck"
+  }
+}
