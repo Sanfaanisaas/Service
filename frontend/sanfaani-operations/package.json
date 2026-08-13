@@ -11,7 +11,8 @@
     "dev:client": "vite --config vite.config.ts --host 0.0.0.0",
     "build:client": "vite build --config vite.config.ts",
     "start": "vite preview --config vite.config.ts --host 0.0.0.0",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -77,6 +78,7 @@
     "typescript": "~5.9.3",
     "vaul": "^1.1.2",
     "vite": "catalog:",
+    "vitest": "^3.2.7",
     "wouter": "^3.3.5",
     "zod": "catalog:"
   },

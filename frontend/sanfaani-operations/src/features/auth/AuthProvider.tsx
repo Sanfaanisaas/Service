@@ -11,25 +11,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session|null>(null);
   const [profile, setProfile] = useState<Profile|null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionResolved, setSessionResolved] = useState(false);
   useEffect(() => {
     // Generated requests already start with `/api`; accept either an origin or
     // an older `/api`-suffixed value without accidentally creating `/api/api`.
     const configuredApiUrl = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') || null;
     setBaseUrl(configuredApiUrl);
     setAuthTokenGetter(async () => (await supabase?.auth.getSession())?.data.session?.access_token ?? null);
-    if (!supabase) { setLoading(false); return; }
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
+    if (!supabase) { setSessionResolved(true); setLoading(false); return; }
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setSessionResolved(true); });
+    const { data } = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); setSessionResolved(true); });
     return () => data.subscription.unsubscribe();
   }, []);
   useEffect(() => {
-    if (!session) { setProfile(null); setLoading(false); return; }
+    if (!session) { setProfile(null); if (sessionResolved) setLoading(false); return; }
     setLoading(true);
     getCurrentUser().then(setProfile).catch(() => setProfile(null)).finally(() => setLoading(false));
-  }, [session?.access_token]);
+  }, [session?.access_token, sessionResolved]);
   const value = useMemo(() => ({ session, profile, loading, configured: authConfigured, signOut: async () => {
     await supabase?.auth.signOut();
+    setSession(null);
     setProfile(null);
+    setLoading(false);
     queryClient.clear();
   } }), [session, profile, loading]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

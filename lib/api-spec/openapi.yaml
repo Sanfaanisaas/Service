@@ -188,7 +188,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkspaceBooking"
+                $ref: "#/components/schemas/WorkspaceRegistrationResult"
         "409":
           description: Workspace capacity reached
   /workspace/{id}/check-in:
@@ -342,6 +342,12 @@ paths:
           schema:
             type: string
             enum: [all, charging, workspace, sales, transactions]
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
       responses:
         "200":
           description: Operational history
@@ -520,6 +526,24 @@ paths:
           description: Updated user
           content:
             application/json:
+                schema: { $ref: "#/components/schemas/AppUser" }
+  /staff/{id}/active:
+    patch:
+      operationId: updateStaffActive
+      tags: [staff]
+      summary: Activate or deactivate an application user while preserving history
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActiveUpdateInput" }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
               schema: { $ref: "#/components/schemas/AppUser" }
   /products/{id}:
     patch:
@@ -586,9 +610,11 @@ components:
         id: { type: string, description: Supabase user id }
         appUserId: { type: string }
         email: { type: string, format: email }
+        name: { type: [string, "null"] }
         role: { type: string, enum: [admin, staff, customer] }
         customerId: { type: [string, "null"] }
         active: { type: boolean }
+        createdAt: { type: string, format: date-time }
     Notification:
       type: object
       required: [id, title, message, type, read, createdAt]
@@ -643,6 +669,11 @@ components:
       required: [role]
       properties:
         role: { type: string, enum: [admin, staff, customer] }
+    ActiveUpdateInput:
+      type: object
+      required: [active]
+      properties:
+        active: { type: boolean }
     ProductUpdateInput:
       type: object
       properties:
@@ -652,7 +683,6 @@ components:
         category: { type: string }
         costPrice: { type: number, minimum: 0 }
         sellingPrice: { type: number, minimum: 0 }
-        quantityOnHand: { type: number, minimum: 0 }
         reorderThreshold: { type: number, minimum: 0 }
         active: { type: boolean }
     StockAdjustmentInput:
@@ -660,7 +690,9 @@ components:
       required: [quantity, reason]
       properties:
         quantity: { type: number, description: Non-zero integer adjustment }
+        type: { type: string, enum: [restock, write-off, correction, return, other] }
         reason: { type: string }
+        note: { type: string }
     HealthStatus:
       type: object
       properties:
@@ -802,6 +834,7 @@ components:
         customerName: { type: string }
         phone: { type: ["string", "null"] }
         deviceInfo: { $ref: "#/components/schemas/DeviceInfo" }
+        seatNumber: { type: number }
         timeIn: { type: ["string", "null"], format: date-time }
         timeOut: { type: ["string", "null"], format: date-time }
         amount: { type: number }
@@ -824,7 +857,15 @@ components:
         email: { type: string }
         deviceInfo: { $ref: "#/components/schemas/DeviceInfo" }
         amount: { type: number, minimum: 0 }
+        paymentMethod: { type: string, enum: [cash, transfer, card, other] }
         whatsappOptIn: { type: boolean }
+    WorkspaceRegistrationResult:
+      type: object
+      required: [booking]
+      properties:
+        booking: { $ref: "#/components/schemas/WorkspaceBooking" }
+        receipt: { oneOf: [{ $ref: "#/components/schemas/Receipt" }, { type: "null" }] }
+        whatsappGroupInviteUrl: { type: [string, "null"] }
     Sale:
       type: object
       required: [id, total, paymentMethod, itemCount, createdAt]
@@ -915,7 +956,7 @@ components:
           items: { $ref: "#/components/schemas/Product" }
     HistoryResponse:
       type: object
-      required: [date, summary, transactions, charging, workspace, sales]
+      required: [date, summary, transactions, charging, workspace, sales, records, pagination]
       properties:
         date: { type: string, format: date }
         summary:
@@ -938,3 +979,28 @@ components:
         sales:
           type: array
           items: { $ref: "#/components/schemas/Sale" }
+        records:
+          type: array
+          items: { $ref: "#/components/schemas/HistoryRecord" }
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+    HistoryRecord:
+      type: object
+      required: [kind, timestamp, record]
+      properties:
+        kind: { type: string, enum: [charging, workspace, sales, transactions] }
+        timestamp: { type: string, format: date-time }
+        record:
+          oneOf:
+            - $ref: "#/components/schemas/ChargingSession"
+            - $ref: "#/components/schemas/WorkspaceBooking"
+            - $ref: "#/components/schemas/Sale"
+            - $ref: "#/components/schemas/Transaction"
+    Pagination:
+      type: object
+      required: [page, limit, total, pages]
+      properties:
+        page: { type: number }
+        limit: { type: number }
+        total: { type: number }
+        pages: { type: number }

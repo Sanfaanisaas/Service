@@ -5,9 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { StockAdjustmentInputType } from './stockAdjustmentInputType';
 
 export interface StockAdjustmentInput {
   /** Non-zero integer adjustment */
   quantity: number;
+  type?: StockAdjustmentInputType;
   reason: string;
+  note?: string;
 }

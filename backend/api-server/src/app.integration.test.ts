@@ -112,6 +112,16 @@ describe('SANFAANI auth and RBAC', () => {
       defaultChargingPrice: 1000, defaultWorkspacePrice: 1500, businessTimezone: 'Africa/Lagos',
     }).expect(200);
   });
+
+  it('preserves one active administrator while allowing audited account access changes', async () => {
+    const admin = await provision('admin', 'admin');
+    await api().patch(`/api/staff/${admin.id}/active`).set(auth('admin')).send({ active: false }).expect(409);
+    await api().patch(`/api/staff/${admin.id}/role`).set(auth('admin')).send({ role: 'staff' }).expect(409);
+    const secondAdmin = await provision('admin', 'staff');
+    await api().patch(`/api/staff/${secondAdmin.id}/active`).set(auth('admin')).send({ active: false }).expect(200);
+    const audit = await models.AuditLog.findOne({ action: 'USER_ACTIVE_UPDATED', entityId: secondAdmin.id });
+    expect(audit?.get('metadata')).toMatchObject({ targetUser: secondAdmin.id, previousActive: true, active: false });
+  });
 });
 
 describe('customer ownership', () => {

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './activeUpdateInput';
 export * from './appUser';
 export * from './appUserRole';
 export * from './chargingCheckInInput';
@@ -30,6 +31,8 @@ export * from './deviceType';
 export * from './getCustomerMyChargingParams';
 export * from './getCustomerMyChargingView';
 export * from './healthStatus';
+export * from './historyRecord';
+export * from './historyRecordKind';
 export * from './historyResponse';
 export * from './historyResponseSummary';
 export * from './listCustomersParams';
@@ -41,6 +44,7 @@ export * from './listTransactionsPeriod';
 export * from './notification';
 export * from './notificationPreferences';
 export * from './notificationType';
+export * from './pagination';
 export * from './product';
 export * from './productInput';
 export * from './productUpdateInput';
@@ -56,8 +60,11 @@ export * from './saleResult';
 export * from './settings';
 export * from './settingsInput';
 export * from './stockAdjustmentInput';
+export * from './stockAdjustmentInputType';
 export * from './transaction';
 export * from './transactionDirection';
 export * from './workspaceBooking';
 export * from './workspaceBookingInput';
+export * from './workspaceBookingInputPaymentMethod';
 export * from './workspaceBookingStatus';
+export * from './workspaceRegistrationResult';

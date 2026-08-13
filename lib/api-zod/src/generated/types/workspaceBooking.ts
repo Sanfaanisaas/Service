@@ -15,6 +15,7 @@ export interface WorkspaceBooking {
   /** @nullable */
   phone?: string | null;
   deviceInfo?: DeviceInfo;
+  seatNumber?: number;
   /** @nullable */
   timeIn?: Date | null;
   /** @nullable */

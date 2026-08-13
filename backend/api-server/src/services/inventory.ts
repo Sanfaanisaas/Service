@@ -9,19 +9,30 @@ import { generateReceipt, recordIncome } from './ledger.js';
 export async function createProduct(input: z.infer<typeof productInput>, actorId: string) {
   const product = await Product.create(input);
   if (input.quantityOnHand > 0) await InventoryMovement.create({
-    productId: product._id, quantity: input.quantityOnHand, reason: 'Opening stock', createdBy: actorId,
+    productId: product._id, previousQuantity: 0, quantity: input.quantityOnHand, newQuantity: input.quantityOnHand,
+    type: 'opening', reason: 'Opening stock', createdBy: actorId,
   });
   await audit(actorId, 'PRODUCT_CREATED', 'product', product.id);
   return product;
 }
-export async function adjustStock(productId: string, quantity: number, reason: string, actorId: string) {
+export async function adjustStock(
+  productId: string,
+  quantity: number,
+  type: 'restock' | 'write-off' | 'correction' | 'return' | 'other',
+  reason: string,
+  note: string | undefined,
+  actorId: string,
+) {
   const product = await Product.findOneAndUpdate(
     { _id: productId, quantityOnHand: { $gte: Math.max(0, -quantity) } },
     { $inc: { quantityOnHand: quantity } }, { new: true, runValidators: true },
   );
   if (!product) throw new ApiError(409, 'NEGATIVE_INVENTORY', 'This adjustment would reduce inventory below zero.');
-  await InventoryMovement.create({ productId, quantity, reason, createdBy: actorId });
-  await audit(actorId, 'INVENTORY_ADJUSTED', 'product', productId, { quantity, reason });
+  await InventoryMovement.create({
+    productId, previousQuantity: product.quantityOnHand - quantity, quantity, newQuantity: product.quantityOnHand,
+    type, reason, note, createdBy: actorId,
+  });
+  await audit(actorId, 'INVENTORY_ADJUSTED', 'product', productId, { quantity, type, reason, note });
   return product;
 }
 export async function createSale(input: z.infer<typeof saleInput>, actorId: string) {
@@ -38,7 +49,10 @@ export async function createSale(input: z.infer<typeof saleInput>, actorId: stri
         );
         if (!product) throw new ApiError(409, 'INSUFFICIENT_INVENTORY', 'One or more products do not have enough available stock.');
         saleItems.push({ productId: product._id, name: product.name, quantity, unitPrice: product.sellingPrice, subtotal: product.sellingPrice * quantity });
-        await InventoryMovement.create([{ productId, quantity: -quantity, reason: 'Stock sale', createdBy: actorId }], { session });
+        await InventoryMovement.create([{
+          productId, previousQuantity: product.quantityOnHand, quantity: -quantity, newQuantity: product.quantityOnHand - quantity,
+          type: 'sale', reason: 'Stock sale', createdBy: actorId,
+        }], { session });
       }
       const total = saleItems.reduce((sum, item) => sum + item.subtotal, 0);
       const [sale] = await Sale.create([{ customerId: input.customerId || undefined, items: saleItems, total, paymentMethod: input.paymentMethod }], { session });

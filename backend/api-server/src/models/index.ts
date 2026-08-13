@@ -34,7 +34,9 @@ productSchema.index({ name: 'text', sku: 'text', category: 'text' });
 
 const movementSchema = new Schema({
   productId: { type: Schema.Types.ObjectId, ref: 'Product', required: true, index: true },
-  quantity: { type: Number, required: true }, reason: { type: String, required: true },
+  previousQuantity: { type: Number, required: true }, quantity: { type: Number, required: true },
+  newQuantity: { type: Number, required: true }, type: { type: String, enum: ['opening', 'restock', 'write-off', 'correction', 'return', 'sale', 'other'], default: 'other' },
+  reason: { type: String, required: true }, note: String,
   createdBy: { type: String, required: true },
 }, options);
 
