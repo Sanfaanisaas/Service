@@ -16,8 +16,6 @@ export interface ProductUpdateInput {
   /** @minimum 0 */
   sellingPrice?: number;
   /** @minimum 0 */
-  quantityOnHand?: number;
-  /** @minimum 0 */
   reorderThreshold?: number;
   active?: boolean;
 }

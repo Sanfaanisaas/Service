@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import {
-  chargingCheckInInput, customerInput, productInput, saleInput, settingsInput, stockAdjustmentInput, workspaceInput,
+  chargingCheckInInput, customerInput, productInput, productUpdateInput, saleInput, settingsInput, stockAdjustmentInput, workspaceInput,
 } from '../contracts.js';
 import { allow } from '../middleware/auth.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
@@ -13,6 +13,7 @@ import { checkIn, collect, updateStatus } from '../services/charging.js';
 import { createProduct, adjustStock, createSale } from '../services/inventory.js';
 import { checkInWorkspace, checkOutWorkspace, registerWorkspace } from '../services/workspace.js';
 import { ACTIVE_CHARGING, ACTIVE_WORKSPACE, audit, settings } from '../services/common.js';
+import { businessDayBounds } from '../lib/dates.js';
 
 export const operations = Router();
 const staff = allow('admin', 'staff');
@@ -23,6 +24,16 @@ const customerId = (req: Request) => {
   return id;
 };
 const routeParam = (value: string | string[] | undefined) => z.string().min(1).parse(value);
+const appUserResponse = (user: InstanceType<typeof AppUser>) => ({
+  id: user.get('supabaseUserId') as string,
+  appUserId: user.id,
+  email: user.get('email') as string,
+  name: user.get('name') as string | undefined,
+  role: user.get('role') as 'admin' | 'staff' | 'customer',
+  active: user.get('active') as boolean,
+  customerId: user.get('customerId')?.toString() ?? null,
+  createdAt: user.get('createdAt') instanceof Date ? user.get('createdAt').toISOString() : undefined,
+});
 
 operations.get('/me', asyncHandler(async (req, res) => {
   res.json({ success: true, data: req.authUser });
@@ -139,7 +150,7 @@ operations.post('/products', admin, asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, data: await createProduct(productInput.parse(req.body), req.authUser!.id) });
 }));
 operations.patch('/products/:id', admin, asyncHandler(async (req, res) => {
-  const product = await Product.findByIdAndUpdate(req.params.id, productInput.partial().parse(req.body), { new: true, runValidators: true });
+  const product = await Product.findByIdAndUpdate(req.params.id, productUpdateInput.parse(req.body), { new: true, runValidators: true });
   if (!product) throw new ApiError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
   await audit(req.authUser!.id, 'PRODUCT_UPDATED', 'product', product.id);
   res.json({ success: true, data: product });
@@ -152,7 +163,7 @@ operations.delete('/products/:id', admin, asyncHandler(async (req, res) => {
 }));
 operations.post('/products/:id/adjust', admin, asyncHandler(async (req, res) => {
   const input = stockAdjustmentInput.parse(req.body);
-  res.json({ success: true, data: await adjustStock(routeParam(req.params.id), input.quantity, input.reason, req.authUser!.id) });
+  res.json({ success: true, data: await adjustStock(routeParam(req.params.id), input.quantity, input.type, input.reason, input.note || undefined, req.authUser!.id) });
 }));
 operations.get('/products/:id/movements', staff, asyncHandler(async (req, res) => {
   res.json({ success: true, data: await InventoryMovement.find({ productId: req.params.id }).sort({ createdAt: -1 }) });
@@ -169,9 +180,18 @@ operations.get('/sales/:id', staff, asyncHandler(async (req, res) => {
 }));
 
 operations.get('/transactions', staff, asyncHandler(async (req, res) => {
+  const period = z.enum(['today', 'yesterday', 'week', 'month']).optional().parse(req.query.period);
   const from = req.query.from ? new Date(String(req.query.from)) : undefined;
   const to = req.query.to ? new Date(String(req.query.to)) : undefined;
-  res.json({ success: true, data: await Transaction.find(from || to ? { createdAt: { ...(from ? { $gte: from } : {}), ...(to ? { $lte: to } : {}) } } : {}).sort({ createdAt: -1 }).limit(500) });
+  let range: { $gte?: Date; $lte?: Date; $lt?: Date } | undefined = from || to ? { ...(from && !Number.isNaN(from.getTime()) ? { $gte: from } : {}), ...(to && !Number.isNaN(to.getTime()) ? { $lte: to } : {}) } : undefined;
+  if (period && !range) {
+    const config = await settings(); const now = new Date();
+    if (period === 'today') range = { $gte: businessDayBounds(config.businessTimezone, now).start, $lt: businessDayBounds(config.businessTimezone, now).end };
+    if (period === 'yesterday') { const day = new Date(now.getTime() - 86_400_000); const bounds = businessDayBounds(config.businessTimezone, day); range = { $gte: bounds.start, $lt: bounds.end }; }
+    if (period === 'week') { const day = new Intl.DateTimeFormat('en-US', { timeZone: config.businessTimezone, weekday: 'short' }).format(now); const offset = ({ Sun: 6, Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5 } as Record<string, number>)[day] ?? 0; const bounds = businessDayBounds(config.businessTimezone, new Date(now.getTime() - offset * 86_400_000)); range = { $gte: bounds.start, $lt: businessDayBounds(config.businessTimezone, now).end }; }
+    if (period === 'month') { const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: config.businessTimezone, year: 'numeric', month: '2-digit' }).formatToParts(now).map((part) => [part.type, part.value])); const bounds = businessDayBounds(config.businessTimezone, new Date(`${parts.year}-${parts.month}-01T12:00:00Z`)); range = { $gte: bounds.start, $lt: businessDayBounds(config.businessTimezone, now).end }; }
+  }
+  res.json({ success: true, data: await Transaction.find(range ? { createdAt: range } : {}).sort({ createdAt: -1 }).limit(500) });
 }));
 operations.get('/receipts', staff, asyncHandler(async (_req, res) => {
   res.json({ success: true, data: await Receipt.find().sort({ generatedAt: -1 }).limit(200) });
@@ -201,14 +221,35 @@ operations.patch('/settings', admin, asyncHandler(async (req, res) => {
   await audit(req.authUser!.id, 'SETTINGS_UPDATED', 'setting', current.id);
   res.json({ success: true, data: current });
 }));
-operations.get('/staff', admin, asyncHandler(async (_req, res) => res.json({ success: true, data: await AppUser.find({ role: { $in: ['admin', 'staff'] } }).sort({ createdAt: -1 }) })));
+operations.get('/staff', admin, asyncHandler(async (_req, res) => {
+  const users = await AppUser.find().sort({ createdAt: -1 });
+  res.json({ success: true, data: users.map(appUserResponse) });
+}));
 operations.patch('/staff/:id/role', admin, asyncHandler(async (req, res) => {
   const { role } = z.object({ role: z.enum(['admin', 'staff', 'customer']) }).parse(req.body);
   const user = await AppUser.findById(req.params.id);
   if (!user) throw new ApiError(404, 'USER_NOT_FOUND', 'User not found.');
   const previousRole = user.get('role');
+  if (previousRole === 'admin' && role !== 'admin') {
+    const activeAdminCount = await AppUser.countDocuments({ role: 'admin', active: true });
+    if (user.get('active') && activeAdminCount <= 1) throw new ApiError(409, 'LAST_ADMIN_REQUIRED', 'At least one active administrator must remain.');
+  }
   user.set('role', role);
   await user.save();
   await audit(req.authUser!.id, 'USER_ROLE_UPDATED', 'user', user.id, { actor: req.authUser!.id, targetUser: user.id, previousRole, newRole: role, timestamp: new Date().toISOString() });
-  res.json({ success: true, data: user });
+  res.json({ success: true, data: appUserResponse(user) });
+}));
+operations.patch('/staff/:id/active', admin, asyncHandler(async (req, res) => {
+  const { active } = z.object({ active: z.boolean() }).parse(req.body);
+  const user = await AppUser.findById(req.params.id);
+  if (!user) throw new ApiError(404, 'USER_NOT_FOUND', 'User not found.');
+  if (!active && user.get('role') === 'admin' && user.get('active')) {
+    const activeAdminCount = await AppUser.countDocuments({ role: 'admin', active: true });
+    if (activeAdminCount <= 1) throw new ApiError(409, 'LAST_ADMIN_REQUIRED', 'At least one active administrator must remain.');
+  }
+  const previousActive = user.get('active');
+  user.set('active', active);
+  await user.save();
+  await audit(req.authUser!.id, 'USER_ACTIVE_UPDATED', 'user', user.id, { actor: req.authUser!.id, targetUser: user.id, previousActive, active, timestamp: new Date().toISOString() });
+  res.json({ success: true, data: appUserResponse(user) });
 }));

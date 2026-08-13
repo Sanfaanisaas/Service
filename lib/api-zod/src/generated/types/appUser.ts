@@ -12,8 +12,11 @@ export interface AppUser {
   id: string;
   appUserId: string;
   email: string;
+  /** @nullable */
+  name?: string | null;
   role: AppUserRole;
   /** @nullable */
   customerId?: string | null;
   active?: boolean;
+  createdAt?: Date;
 }

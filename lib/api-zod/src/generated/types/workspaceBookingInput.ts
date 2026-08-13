@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DeviceInfo } from './deviceInfo';
+import type { WorkspaceBookingInputPaymentMethod } from './workspaceBookingInputPaymentMethod';
 
 export interface WorkspaceBookingInput {
   /** @minLength 2 */
@@ -16,5 +17,6 @@ export interface WorkspaceBookingInput {
   deviceInfo?: DeviceInfo;
   /** @minimum 0 */
   amount?: number;
+  paymentMethod?: WorkspaceBookingInputPaymentMethod;
   whatsappOptIn?: boolean;
 }

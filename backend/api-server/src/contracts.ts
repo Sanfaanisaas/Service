@@ -25,9 +25,15 @@ export const productInput = z.object({
   quantityOnHand: z.coerce.number().int().min(0), reorderThreshold: z.coerce.number().int().min(0),
   active: z.boolean().default(true),
 });
+// Product edits deliberately exclude stock. Quantity changes must use the
+// adjustment endpoint so that the movement trail and non-negative guard are
+// always applied.
+export const productUpdateInput = productInput.omit({ quantityOnHand: true }).partial();
 export const stockAdjustmentInput = z.object({
   quantity: z.coerce.number().int().refine((value) => value !== 0, 'Quantity cannot be zero'),
+  type: z.enum(['restock', 'write-off', 'correction', 'return', 'other']).default('other'),
   reason: z.string().trim().min(3).max(240),
+  note: optionalText,
 });
 export const chargingCheckInInput = z.object({
   customerName: z.string().trim().min(2).max(120), phone: z.string().trim().min(7).max(24),

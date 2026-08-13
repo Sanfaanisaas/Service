@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChargingSession } from './chargingSession';
+import type { HistoryRecord } from './historyRecord';
 import type { HistoryResponseSummary } from './historyResponseSummary';
+import type { Pagination } from './pagination';
 import type { Sale } from './sale';
 import type { Transaction } from './transaction';
 import type { WorkspaceBooking } from './workspaceBooking';
@@ -18,4 +20,6 @@ export interface HistoryResponse {
   charging: ChargingSession[];
   workspace: WorkspaceBooking[];
   sales: Sale[];
+  records: HistoryRecord[];
+  pagination: Pagination;
 }

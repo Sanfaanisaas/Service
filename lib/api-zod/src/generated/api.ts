@@ -314,6 +314,7 @@ export const ListWorkspaceBookingsResponseItem = zod.object({
   "brand": zod.string().optional(),
   "model": zod.string().optional()
 }).optional(),
+  "seatNumber": zod.number().optional(),
   "timeIn": zod.coerce.date().nullish(),
   "timeOut": zod.coerce.date().nullish(),
   "amount": zod.number().optional(),
@@ -344,10 +345,12 @@ export const RegisterWorkspaceBookingBody = zod.object({
   "model": zod.string().optional()
 }).optional(),
   "amount": zod.number().min(registerWorkspaceBookingBodyAmountMin).optional(),
+  "paymentMethod": zod.enum(['cash', 'transfer', 'card', 'other']).optional(),
   "whatsappOptIn": zod.boolean().optional()
 })
 
 export const RegisterWorkspaceBookingResponse = zod.object({
+  "booking": zod.object({
   "id": zod.string(),
   "customerId": zod.string(),
   "customerName": zod.string(),
@@ -357,11 +360,26 @@ export const RegisterWorkspaceBookingResponse = zod.object({
   "brand": zod.string().optional(),
   "model": zod.string().optional()
 }).optional(),
+  "seatNumber": zod.number().optional(),
   "timeIn": zod.coerce.date().nullish(),
   "timeOut": zod.coerce.date().nullish(),
   "amount": zod.number().optional(),
   "status": zod.enum(['registered', 'checked-in', 'checked-out', 'cancelled']),
   "createdAt": zod.coerce.date()
+}),
+  "receipt": zod.union([zod.object({
+  "id": zod.string(),
+  "receiptNumber": zod.string(),
+  "type": zod.enum(['sale', 'charging', 'workspace']),
+  "customerName": zod.string().nullish(),
+  "referenceId": zod.string().optional(),
+  "claimId": zod.string().nullish(),
+  "subtotal": zod.number(),
+  "total": zod.number(),
+  "paymentMethod": zod.string(),
+  "generatedAt": zod.coerce.date()
+}),zod.null()]).optional(),
+  "whatsappGroupInviteUrl": zod.string().nullish()
 })
 
 
@@ -382,6 +400,7 @@ export const CheckInWorkspaceBookingResponse = zod.object({
   "brand": zod.string().optional(),
   "model": zod.string().optional()
 }).optional(),
+  "seatNumber": zod.number().optional(),
   "timeIn": zod.coerce.date().nullish(),
   "timeOut": zod.coerce.date().nullish(),
   "amount": zod.number().optional(),
@@ -407,6 +426,7 @@ export const CheckOutWorkspaceBookingResponse = zod.object({
   "brand": zod.string().optional(),
   "model": zod.string().optional()
 }).optional(),
+  "seatNumber": zod.number().optional(),
   "timeIn": zod.coerce.date().nullish(),
   "timeOut": zod.coerce.date().nullish(),
   "amount": zod.number().optional(),
@@ -576,9 +596,16 @@ export const ListReceiptsResponse = zod.array(ListReceiptsResponseItem)
 /**
  * @summary List daily operational history
  */
+
+export const listHistoryQueryLimitMax = 100;
+
+
+
 export const ListHistoryQueryParams = zod.object({
   "date": zod.date().optional(),
-  "type": zod.enum(['all', 'charging', 'workspace', 'sales', 'transactions']).optional()
+  "type": zod.enum(['all', 'charging', 'workspace', 'sales', 'transactions']).optional(),
+  "page": zod.coerce.number().int().min(1).optional(),
+  "limit": zod.coerce.number().int().min(1).max(listHistoryQueryLimitMax).optional()
 })
 
 export const ListHistoryResponse = zod.object({
@@ -630,6 +657,7 @@ export const ListHistoryResponse = zod.object({
   "brand": zod.string().optional(),
   "model": zod.string().optional()
 }).optional(),
+  "seatNumber": zod.number().optional(),
   "timeIn": zod.coerce.date().nullish(),
   "timeOut": zod.coerce.date().nullish(),
   "amount": zod.number().optional(),
@@ -643,7 +671,70 @@ export const ListHistoryResponse = zod.object({
   "total": zod.number(),
   "paymentMethod": zod.string(),
   "createdAt": zod.coerce.date()
-}))
+})),
+  "records": zod.array(zod.object({
+  "kind": zod.enum(['charging', 'workspace', 'sales', 'transactions']),
+  "timestamp": zod.coerce.date(),
+  "record": zod.union([zod.object({
+  "id": zod.string(),
+  "customerId": zod.string(),
+  "customerName": zod.string(),
+  "publicSessionId": zod.string(),
+  "device": zod.object({
+  "type": zod.enum(['phone', 'laptop', 'tablet', 'powerbank', 'other']),
+  "brand": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "description": zod.string().nullish()
+}),
+  "slotNumber": zod.number(),
+  "timeIn": zod.coerce.date(),
+  "estimatedReadyAt": zod.coerce.date().nullish(),
+  "readyAt": zod.coerce.date().nullish(),
+  "collectedAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['checked-in', 'charging', 'ready', 'collected', 'cancelled']),
+  "amount": zod.number(),
+  "paymentStatus": zod.enum(['pending', 'paid']),
+  "paymentMethod": zod.string().optional()
+}),zod.object({
+  "id": zod.string(),
+  "customerId": zod.string(),
+  "customerName": zod.string(),
+  "phone": zod.string().nullish(),
+  "deviceInfo": zod.object({
+  "type": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "model": zod.string().optional()
+}).optional(),
+  "seatNumber": zod.number().optional(),
+  "timeIn": zod.coerce.date().nullish(),
+  "timeOut": zod.coerce.date().nullish(),
+  "amount": zod.number().optional(),
+  "status": zod.enum(['registered', 'checked-in', 'checked-out', 'cancelled']),
+  "createdAt": zod.coerce.date()
+}),zod.object({
+  "id": zod.string(),
+  "customerId": zod.string().nullish(),
+  "itemCount": zod.number(),
+  "total": zod.number(),
+  "paymentMethod": zod.string(),
+  "createdAt": zod.coerce.date()
+}),zod.object({
+  "id": zod.string(),
+  "type": zod.string(),
+  "amount": zod.number(),
+  "direction": zod.enum(['income', 'expense']),
+  "paymentMethod": zod.string(),
+  "description": zod.string(),
+  "createdAt": zod.coerce.date()
+})])
+})),
+  "pagination": zod.object({
+  "page": zod.number(),
+  "limit": zod.number(),
+  "total": zod.number(),
+  "pages": zod.number()
+})
 })
 
 
@@ -654,9 +745,11 @@ export const GetCurrentUserResponse = zod.object({
   "id": zod.string().describe('Supabase user id'),
   "appUserId": zod.string(),
   "email": zod.email(),
+  "name": zod.string().nullish(),
   "role": zod.enum(['admin', 'staff', 'customer']),
   "customerId": zod.string().nullish(),
-  "active": zod.boolean().optional()
+  "active": zod.boolean().optional(),
+  "createdAt": zod.coerce.date().optional()
 })
 
 
@@ -745,6 +838,7 @@ export const GetCustomerMyWorkspaceResponseItem = zod.object({
   "brand": zod.string().optional(),
   "model": zod.string().optional()
 }).optional(),
+  "seatNumber": zod.number().optional(),
   "timeIn": zod.coerce.date().nullish(),
   "timeOut": zod.coerce.date().nullish(),
   "amount": zod.number().optional(),
@@ -901,9 +995,11 @@ export const ListStaffResponseItem = zod.object({
   "id": zod.string().describe('Supabase user id'),
   "appUserId": zod.string(),
   "email": zod.email(),
+  "name": zod.string().nullish(),
   "role": zod.enum(['admin', 'staff', 'customer']),
   "customerId": zod.string().nullish(),
-  "active": zod.boolean().optional()
+  "active": zod.boolean().optional(),
+  "createdAt": zod.coerce.date().optional()
 })
 export const ListStaffResponse = zod.array(ListStaffResponseItem)
 
@@ -923,9 +1019,34 @@ export const UpdateStaffRoleResponse = zod.object({
   "id": zod.string().describe('Supabase user id'),
   "appUserId": zod.string(),
   "email": zod.email(),
+  "name": zod.string().nullish(),
   "role": zod.enum(['admin', 'staff', 'customer']),
   "customerId": zod.string().nullish(),
-  "active": zod.boolean().optional()
+  "active": zod.boolean().optional(),
+  "createdAt": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Activate or deactivate an application user while preserving history
+ */
+export const UpdateStaffActiveParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateStaffActiveBody = zod.object({
+  "active": zod.boolean()
+})
+
+export const UpdateStaffActiveResponse = zod.object({
+  "id": zod.string().describe('Supabase user id'),
+  "appUserId": zod.string(),
+  "email": zod.email(),
+  "name": zod.string().nullish(),
+  "role": zod.enum(['admin', 'staff', 'customer']),
+  "customerId": zod.string().nullish(),
+  "active": zod.boolean().optional(),
+  "createdAt": zod.coerce.date().optional()
 })
 
 
@@ -940,8 +1061,6 @@ export const updateProductBodyCostPriceMin = 0;
 
 export const updateProductBodySellingPriceMin = 0;
 
-export const updateProductBodyQuantityOnHandMin = 0;
-
 export const updateProductBodyReorderThresholdMin = 0;
 
 
@@ -953,7 +1072,6 @@ export const UpdateProductBody = zod.object({
   "category": zod.string().optional(),
   "costPrice": zod.number().min(updateProductBodyCostPriceMin).optional(),
   "sellingPrice": zod.number().min(updateProductBodySellingPriceMin).optional(),
-  "quantityOnHand": zod.number().min(updateProductBodyQuantityOnHandMin).optional(),
   "reorderThreshold": zod.number().min(updateProductBodyReorderThresholdMin).optional(),
   "active": zod.boolean().optional()
 })
@@ -982,7 +1100,9 @@ export const AdjustProductStockParams = zod.object({
 
 export const AdjustProductStockBody = zod.object({
   "quantity": zod.number().describe('Non-zero integer adjustment'),
-  "reason": zod.string()
+  "type": zod.enum(['restock', 'write-off', 'correction', 'return', 'other']).optional(),
+  "reason": zod.string(),
+  "note": zod.string().optional()
 })
 
 export const AdjustProductStockResponse = zod.object({

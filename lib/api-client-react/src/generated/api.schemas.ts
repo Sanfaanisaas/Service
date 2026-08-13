@@ -19,10 +19,13 @@ export interface AppUser {
   id: string;
   appUserId: string;
   email: string;
+  /** @nullable */
+  name?: string | null;
   role: AppUserRole;
   /** @nullable */
   customerId?: string | null;
   active?: boolean;
+  createdAt?: string;
 }
 
 export type NotificationType = typeof NotificationType[keyof typeof NotificationType];
@@ -162,6 +165,10 @@ export interface RoleUpdateInput {
   role: RoleUpdateInputRole;
 }
 
+export interface ActiveUpdateInput {
+  active: boolean;
+}
+
 export interface ProductUpdateInput {
   sku?: string;
   name?: string;
@@ -172,16 +179,27 @@ export interface ProductUpdateInput {
   /** @minimum 0 */
   sellingPrice?: number;
   /** @minimum 0 */
-  quantityOnHand?: number;
-  /** @minimum 0 */
   reorderThreshold?: number;
   active?: boolean;
 }
 
+export type StockAdjustmentInputType = typeof StockAdjustmentInputType[keyof typeof StockAdjustmentInputType];
+
+
+export const StockAdjustmentInputType = {
+  restock: 'restock',
+  'write-off': 'write-off',
+  correction: 'correction',
+  return: 'return',
+  other: 'other',
+} as const;
+
 export interface StockAdjustmentInput {
   /** Non-zero integer adjustment */
   quantity: number;
+  type?: StockAdjustmentInputType;
   reason: string;
+  note?: string;
 }
 
 export interface HealthStatus {
@@ -358,6 +376,7 @@ export interface WorkspaceBooking {
   /** @nullable */
   phone?: string | null;
   deviceInfo?: DeviceInfo;
+  seatNumber?: number;
   /** @nullable */
   timeIn?: string | null;
   /** @nullable */
@@ -366,6 +385,16 @@ export interface WorkspaceBooking {
   status: WorkspaceBookingStatus;
   createdAt: string;
 }
+
+export type WorkspaceBookingInputPaymentMethod = typeof WorkspaceBookingInputPaymentMethod[keyof typeof WorkspaceBookingInputPaymentMethod];
+
+
+export const WorkspaceBookingInputPaymentMethod = {
+  cash: 'cash',
+  transfer: 'transfer',
+  card: 'card',
+  other: 'other',
+} as const;
 
 export interface WorkspaceBookingInput {
   /** @minLength 2 */
@@ -376,7 +405,15 @@ export interface WorkspaceBookingInput {
   deviceInfo?: DeviceInfo;
   /** @minimum 0 */
   amount?: number;
+  paymentMethod?: WorkspaceBookingInputPaymentMethod;
   whatsappOptIn?: boolean;
+}
+
+export interface WorkspaceRegistrationResult {
+  booking: WorkspaceBooking;
+  receipt?: Receipt | null;
+  /** @nullable */
+  whatsappGroupInviteUrl?: string | null;
 }
 
 export interface Sale {
@@ -465,6 +502,29 @@ export type HistoryResponseSummary = {
   revenue: number;
 };
 
+export type HistoryRecordKind = typeof HistoryRecordKind[keyof typeof HistoryRecordKind];
+
+
+export const HistoryRecordKind = {
+  charging: 'charging',
+  workspace: 'workspace',
+  sales: 'sales',
+  transactions: 'transactions',
+} as const;
+
+export interface HistoryRecord {
+  kind: HistoryRecordKind;
+  timestamp: string;
+  record: ChargingSession | WorkspaceBooking | Sale | Transaction;
+}
+
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
 export interface HistoryResponse {
   date: string;
   summary: HistoryResponseSummary;
@@ -472,6 +532,8 @@ export interface HistoryResponse {
   charging: ChargingSession[];
   workspace: WorkspaceBooking[];
   sales: Sale[];
+  records: HistoryRecord[];
+  pagination: Pagination;
 }
 
 export type ListCustomersParams = {
@@ -500,6 +562,15 @@ export const ListTransactionsPeriod = {
 export type ListHistoryParams = {
 date?: string;
 type?: ListHistoryType;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
 };
 
 export type ListHistoryType = typeof ListHistoryType[keyof typeof ListHistoryType];

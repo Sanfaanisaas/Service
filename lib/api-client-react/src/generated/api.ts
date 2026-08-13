@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ActiveUpdateInput,
   AppUser,
   ChargingCheckInInput,
   ChargingCheckInResult,
@@ -51,7 +52,8 @@ import type {
   StockAdjustmentInput,
   Transaction,
   WorkspaceBooking,
-  WorkspaceBookingInput
+  WorkspaceBookingInput,
+  WorkspaceRegistrationResult
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -771,9 +773,9 @@ export const getRegisterWorkspaceBookingUrl = () => {
 /**
  * @summary Register a workspace user
  */
-export const registerWorkspaceBooking = async (workspaceBookingInput: WorkspaceBookingInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceBooking> => {
+export const registerWorkspaceBooking = async (workspaceBookingInput: WorkspaceBookingInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceRegistrationResult> => {
 
-  return customFetch<WorkspaceBooking>(getRegisterWorkspaceBookingUrl(),
+  return customFetch<WorkspaceRegistrationResult>(getRegisterWorkspaceBookingUrl(),
   {
     ...options,
     method: 'POST',
@@ -2504,6 +2506,78 @@ export const useUpdateStaffRole = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateStaffRoleMutationOptions(options));
+    }
+
+export const getUpdateStaffActiveUrl = (id: string,) => {
+
+
+
+
+  return `/api/staff/${id}/active`
+}
+
+/**
+ * @summary Activate or deactivate an application user while preserving history
+ */
+export const updateStaffActive = async (id: string,
+    activeUpdateInput: ActiveUpdateInput, options?: Parameters<typeof customFetch>[1]): Promise<AppUser> => {
+
+  return customFetch<AppUser>(getUpdateStaffActiveUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(activeUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateStaffActiveMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStaffActive>>, TError,{id: string;data: BodyType<ActiveUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateStaffActive>>, TError,{id: string;data: BodyType<ActiveUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateStaffActive'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateStaffActive>>, {id: string;data: BodyType<ActiveUpdateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateStaffActive(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateStaffActiveMutationResult = NonNullable<Awaited<ReturnType<typeof updateStaffActive>>>
+    export type UpdateStaffActiveMutationBody = BodyType<ActiveUpdateInput>
+    export type UpdateStaffActiveMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Activate or deactivate an application user while preserving history
+ */
+export const useUpdateStaffActive = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStaffActive>>, TError,{id: string;data: BodyType<ActiveUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateStaffActive>>,
+        TError,
+        {id: string;data: BodyType<ActiveUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateStaffActiveMutationOptions(options));
     }
 
 export const getUpdateProductUrl = (id: string,) => {
