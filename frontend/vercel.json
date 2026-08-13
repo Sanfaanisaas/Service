@@ -2,8 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm build",
-  "outputDirectory": "frontend/sanfaani-operations/dist/client",
+  "buildCommand": "pnpm --filter \"./**\" run build",
+  "outputDirectory": "sanfaani-operations/dist/client",
   "rewrites": [
     {
       "source": "/:path((?!api(?:/|$)).*)",
