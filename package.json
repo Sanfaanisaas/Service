@@ -7,6 +7,7 @@
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./backend/**\" --filter \"./frontend/**\" --filter \"./scripts\" --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
     "dev": "pnpm -r --parallel run dev",
     "dev:backend": "pnpm --filter \"@workspace/backend\" run dev",
     "dev:frontend": "pnpm --filter \"@workspace/frontend\" run dev",

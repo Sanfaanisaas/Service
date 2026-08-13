@@ -1,50 +1,22 @@
-import express, { type Express } from "express";
-import cors from "cors";
-import pinoHttp from "pino-http";
-import { clerkMiddleware } from "@clerk/express";
-import { publishableKeyFromHost } from "@clerk/shared/keys";
-import router from "./routes";
-import { logger } from "./lib/logger";
-import {
-  CLERK_PROXY_PATH,
-  clerkProxyMiddleware,
-  getClerkProxyHost,
-} from "./middlewares/clerkProxyMiddleware";
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
+import { env } from './config/env.js';
+import { authenticate } from './middleware/auth.js';
+import { errorHandler, notFound } from './lib/errors.js';
+import { operations } from './routes/operations.js';
+import { reporting } from './routes/reporting.js';
+import { push } from './routes/push.js';
 
-const app: Express = express();
-
-app.use(
-  pinoHttp({
-    logger,
-    serializers: {
-      req(req) {
-        return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0],
-        };
-      },
-      res(res) {
-        return {
-          statusCode: res.statusCode,
-        };
-      },
-    },
-  }),
-);
-app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
-app.use(cors({ credentials: true, origin: true }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(
-  clerkMiddleware((req) => ({
-    publishableKey: publishableKeyFromHost(
-      getClerkProxyHost(req) ?? "",
-      process.env.CLERK_PUBLISHABLE_KEY,
-    ),
-  })),
-);
-
-app.use("/api", router);
-
-export default app;
+export const app = express();
+app.disable('x-powered-by');
+app.use(helmet({ contentSecurityPolicy: env.NODE_ENV === 'production' ? undefined : false }));
+app.use(cors({ origin: env.CLIENT_URL, credentials: true }));
+app.use(express.json({ limit: '250kb' }));
+app.use(express.urlencoded({ extended: false, limit: '250kb' }));
+app.use('/api', rateLimit({ windowMs: 60_000, limit: 180, standardHeaders: 'draft-8', legacyHeaders: false }));
+app.get(['/api/health', '/api/healthz'], (_req, res) => res.json({ success: true, data: { status: 'ok' } }));
+app.use('/api', authenticate, reporting, push, operations);
+app.use(notFound);
+app.use(errorHandler);

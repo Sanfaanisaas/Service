@@ -647,3 +647,377 @@ export const ListHistoryResponse = zod.object({
 })
 
 
+/**
+ * @summary Get the authenticated SANFAANI application profile
+ */
+export const GetCurrentUserResponse = zod.object({
+  "id": zod.string().describe('Supabase user id'),
+  "appUserId": zod.string(),
+  "email": zod.email(),
+  "role": zod.enum(['admin', 'staff', 'customer']),
+  "customerId": zod.string().nullish(),
+  "active": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Get the authenticated customer's profile
+ */
+export const GetCustomerMeResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "whatsappOptIn": zod.boolean(),
+  "notificationPreferences": zod.object({
+  "push": zod.boolean(),
+  "inApp": zod.boolean()
+}),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get only the authenticated customer's charging sessions
+ */
+export const GetCustomerMyChargingQueryParams = zod.object({
+  "view": zod.enum(['active', 'history', 'latest']).optional()
+})
+
+export const GetCustomerMyChargingResponse = zod.object({
+  "activeSession": zod.union([zod.object({
+  "id": zod.string(),
+  "customerId": zod.string(),
+  "customerName": zod.string(),
+  "publicSessionId": zod.string(),
+  "device": zod.object({
+  "type": zod.enum(['phone', 'laptop', 'tablet', 'powerbank', 'other']),
+  "brand": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "description": zod.string().nullish()
+}),
+  "slotNumber": zod.number(),
+  "timeIn": zod.coerce.date(),
+  "estimatedReadyAt": zod.coerce.date().nullish(),
+  "readyAt": zod.coerce.date().nullish(),
+  "collectedAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['checked-in', 'charging', 'ready', 'collected', 'cancelled']),
+  "amount": zod.number(),
+  "paymentStatus": zod.enum(['pending', 'paid']),
+  "paymentMethod": zod.string().optional()
+}),zod.null()]).optional(),
+  "recentSessions": zod.array(zod.object({
+  "id": zod.string(),
+  "customerId": zod.string(),
+  "customerName": zod.string(),
+  "publicSessionId": zod.string(),
+  "device": zod.object({
+  "type": zod.enum(['phone', 'laptop', 'tablet', 'powerbank', 'other']),
+  "brand": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "description": zod.string().nullish()
+}),
+  "slotNumber": zod.number(),
+  "timeIn": zod.coerce.date(),
+  "estimatedReadyAt": zod.coerce.date().nullish(),
+  "readyAt": zod.coerce.date().nullish(),
+  "collectedAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['checked-in', 'charging', 'ready', 'collected', 'cancelled']),
+  "amount": zod.number(),
+  "paymentStatus": zod.enum(['pending', 'paid']),
+  "paymentMethod": zod.string().optional()
+}))
+})
+
+
+/**
+ * @summary Get only the authenticated customer's workspace bookings
+ */
+export const GetCustomerMyWorkspaceResponseItem = zod.object({
+  "id": zod.string(),
+  "customerId": zod.string(),
+  "customerName": zod.string(),
+  "phone": zod.string().nullish(),
+  "deviceInfo": zod.object({
+  "type": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "model": zod.string().optional()
+}).optional(),
+  "timeIn": zod.coerce.date().nullish(),
+  "timeOut": zod.coerce.date().nullish(),
+  "amount": zod.number().optional(),
+  "status": zod.enum(['registered', 'checked-in', 'checked-out', 'cancelled']),
+  "createdAt": zod.coerce.date()
+})
+export const GetCustomerMyWorkspaceResponse = zod.array(GetCustomerMyWorkspaceResponseItem)
+
+
+/**
+ * @summary Get only the authenticated customer's receipts
+ */
+export const GetCustomerMyReceiptsResponseItem = zod.object({
+  "id": zod.string(),
+  "receiptNumber": zod.string(),
+  "type": zod.enum(['sale', 'charging', 'workspace']),
+  "customerName": zod.string().nullish(),
+  "referenceId": zod.string().optional(),
+  "claimId": zod.string().nullish(),
+  "subtotal": zod.number(),
+  "total": zod.number(),
+  "paymentMethod": zod.string(),
+  "generatedAt": zod.coerce.date()
+})
+export const GetCustomerMyReceiptsResponse = zod.array(GetCustomerMyReceiptsResponseItem)
+
+
+/**
+ * @summary Get only the authenticated customer's notifications
+ */
+export const GetCustomerMyNotificationsResponseItem = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "message": zod.string(),
+  "type": zod.enum(['charging_ready', 'charging_reminder', 'workspace_available', 'low_stock', 'system']),
+  "read": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const GetCustomerMyNotificationsResponse = zod.array(GetCustomerMyNotificationsResponseItem)
+
+
+/**
+ * @summary Mark one owned notification as read
+ */
+export const MarkCustomerNotificationReadParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const MarkCustomerNotificationReadResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "message": zod.string(),
+  "type": zod.enum(['charging_ready', 'charging_reminder', 'workspace_available', 'low_stock', 'system']),
+  "read": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List notifications for the authenticated application user
+ */
+export const ListNotificationsResponseItem = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "message": zod.string(),
+  "type": zod.enum(['charging_ready', 'charging_reminder', 'workspace_available', 'low_stock', 'system']),
+  "read": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const ListNotificationsResponse = zod.array(ListNotificationsResponseItem)
+
+
+/**
+ * @summary Mark a visible notification as read
+ */
+export const MarkNotificationReadParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const MarkNotificationReadResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "message": zod.string(),
+  "type": zod.enum(['charging_ready', 'charging_reminder', 'workspace_available', 'low_stock', 'system']),
+  "read": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get SANFAANI settings
+ */
+export const GetSettingsResponse = zod.object({
+  "id": zod.string(),
+  "businessName": zod.string(),
+  "businessAddress": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "currency": zod.string(),
+  "chargingCapacity": zod.number(),
+  "workspaceCapacity": zod.number(),
+  "defaultChargingPrice": zod.number(),
+  "defaultWorkspacePrice": zod.number(),
+  "whatsappGroupInviteUrl": zod.string().nullish(),
+  "businessTimezone": zod.string(),
+  "receiptFooter": zod.string().nullish()
+})
+
+
+/**
+ * @summary Update administrator-authorized settings
+ */
+
+
+export const updateSettingsBodyDefaultChargingPriceMin = 0;
+
+export const updateSettingsBodyDefaultWorkspacePriceMin = 0;
+
+
+
+export const UpdateSettingsBody = zod.object({
+  "businessName": zod.string(),
+  "businessAddress": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "currency": zod.string(),
+  "chargingCapacity": zod.number().min(1),
+  "workspaceCapacity": zod.number().min(1),
+  "defaultChargingPrice": zod.number().min(updateSettingsBodyDefaultChargingPriceMin),
+  "defaultWorkspacePrice": zod.number().min(updateSettingsBodyDefaultWorkspacePriceMin),
+  "whatsappGroupInviteUrl": zod.string().optional(),
+  "businessTimezone": zod.string(),
+  "receiptFooter": zod.string().optional()
+})
+
+export const UpdateSettingsResponse = zod.object({
+  "id": zod.string(),
+  "businessName": zod.string(),
+  "businessAddress": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "currency": zod.string(),
+  "chargingCapacity": zod.number(),
+  "workspaceCapacity": zod.number(),
+  "defaultChargingPrice": zod.number(),
+  "defaultWorkspacePrice": zod.number(),
+  "whatsappGroupInviteUrl": zod.string().nullish(),
+  "businessTimezone": zod.string(),
+  "receiptFooter": zod.string().nullish()
+})
+
+
+/**
+ * @summary List staff and administrators
+ */
+export const ListStaffResponseItem = zod.object({
+  "id": zod.string().describe('Supabase user id'),
+  "appUserId": zod.string(),
+  "email": zod.email(),
+  "role": zod.enum(['admin', 'staff', 'customer']),
+  "customerId": zod.string().nullish(),
+  "active": zod.boolean().optional()
+})
+export const ListStaffResponse = zod.array(ListStaffResponseItem)
+
+
+/**
+ * @summary Change a user role and record its audit history
+ */
+export const UpdateStaffRoleParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateStaffRoleBody = zod.object({
+  "role": zod.enum(['admin', 'staff', 'customer'])
+})
+
+export const UpdateStaffRoleResponse = zod.object({
+  "id": zod.string().describe('Supabase user id'),
+  "appUserId": zod.string(),
+  "email": zod.email(),
+  "role": zod.enum(['admin', 'staff', 'customer']),
+  "customerId": zod.string().nullish(),
+  "active": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Update a product
+ */
+export const UpdateProductParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const updateProductBodyCostPriceMin = 0;
+
+export const updateProductBodySellingPriceMin = 0;
+
+export const updateProductBodyQuantityOnHandMin = 0;
+
+export const updateProductBodyReorderThresholdMin = 0;
+
+
+
+export const UpdateProductBody = zod.object({
+  "sku": zod.string().optional(),
+  "name": zod.string().optional(),
+  "description": zod.string().optional(),
+  "category": zod.string().optional(),
+  "costPrice": zod.number().min(updateProductBodyCostPriceMin).optional(),
+  "sellingPrice": zod.number().min(updateProductBodySellingPriceMin).optional(),
+  "quantityOnHand": zod.number().min(updateProductBodyQuantityOnHandMin).optional(),
+  "reorderThreshold": zod.number().min(updateProductBodyReorderThresholdMin).optional(),
+  "active": zod.boolean().optional()
+})
+
+export const UpdateProductResponse = zod.object({
+  "id": zod.string(),
+  "sku": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "category": zod.string(),
+  "costPrice": zod.number(),
+  "sellingPrice": zod.number(),
+  "quantityOnHand": zod.number(),
+  "reorderThreshold": zod.number(),
+  "active": zod.boolean(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Atomically adjust product stock without allowing negative inventory
+ */
+export const AdjustProductStockParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const AdjustProductStockBody = zod.object({
+  "quantity": zod.number().describe('Non-zero integer adjustment'),
+  "reason": zod.string()
+})
+
+export const AdjustProductStockResponse = zod.object({
+  "id": zod.string(),
+  "sku": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "category": zod.string(),
+  "costPrice": zod.number(),
+  "sellingPrice": zod.number(),
+  "quantityOnHand": zod.number(),
+  "reorderThreshold": zod.number(),
+  "active": zod.boolean(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get one authorized receipt by identifier or receipt number
+ */
+export const GetReceiptDetailParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetReceiptDetailResponse = zod.object({
+  "id": zod.string(),
+  "receiptNumber": zod.string(),
+  "type": zod.enum(['sale', 'charging', 'workspace']),
+  "customerName": zod.string().nullish(),
+  "referenceId": zod.string().optional(),
+  "claimId": zod.string().nullish(),
+  "subtotal": zod.number(),
+  "total": zod.number(),
+  "paymentMethod": zod.string(),
+  "generatedAt": zod.coerce.date()
+})
+
+

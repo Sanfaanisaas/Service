@@ -7,6 +7,8 @@ info:
 servers:
   - url: /api
     description: Base API path
+security:
+  - bearerAuth: []
 tags:
   - name: health
     description: Health operations
@@ -347,6 +349,227 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HistoryResponse"
+  /me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get the authenticated SANFAANI application profile
+      responses:
+        "200":
+          description: Application user profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppUser" }
+  /customer/me:
+    get:
+      operationId: getCustomerMe
+      tags: [customer]
+      summary: Get the authenticated customer's profile
+      responses:
+        "200":
+          description: Customer profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+  /customer/me/charging:
+    get:
+      operationId: getCustomerMyCharging
+      tags: [customer]
+      summary: Get only the authenticated customer's charging sessions
+      parameters:
+        - name: view
+          in: query
+          schema: { type: string, enum: [active, history, latest] }
+      responses:
+        "200":
+          description: Customer charging activity
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerChargingResponse" }
+  /customer/me/workspace:
+    get:
+      operationId: getCustomerMyWorkspace
+      tags: [customer]
+      summary: Get only the authenticated customer's workspace bookings
+      responses:
+        "200":
+          description: Customer workspace bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkspaceBooking" }
+  /customer/me/receipts:
+    get:
+      operationId: getCustomerMyReceipts
+      tags: [customer]
+      summary: Get only the authenticated customer's receipts
+      responses:
+        "200":
+          description: Customer receipts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Receipt" }
+  /customer/me/notifications:
+    get:
+      operationId: getCustomerMyNotifications
+      tags: [customer, notifications]
+      summary: Get only the authenticated customer's notifications
+      responses:
+        "200":
+          description: Customer notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Notification" }
+  /customer/me/notifications/{id}/read:
+    patch:
+      operationId: markCustomerNotificationRead
+      tags: [customer, notifications]
+      summary: Mark one owned notification as read
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Updated notification
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Notification" }
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications for the authenticated application user
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Notification" }
+  /notifications/{id}/read:
+    patch:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a visible notification as read
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Updated notification
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Notification" }
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get SANFAANI settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+    patch:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update administrator-authorized settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SettingsInput" }
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+  /staff:
+    get:
+      operationId: listStaff
+      tags: [staff]
+      summary: List staff and administrators
+      responses:
+        "200":
+          description: Staff users
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AppUser" }
+  /staff/{id}/role:
+    patch:
+      operationId: updateStaffRole
+      tags: [staff]
+      summary: Change a user role and record its audit history
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleUpdateInput" }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppUser" }
+  /products/{id}:
+    patch:
+      operationId: updateProduct
+      tags: [inventory]
+      summary: Update a product
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductUpdateInput" }
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+  /products/{id}/adjust:
+    post:
+      operationId: adjustProductStock
+      tags: [inventory]
+      summary: Atomically adjust product stock without allowing negative inventory
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StockAdjustmentInput" }
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+  /receipts/{id}:
+    get:
+      operationId: getReceiptDetail
+      tags: [receipts]
+      summary: Get one authorized receipt by identifier or receipt number
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Receipt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Receipt" }
 components:
   parameters:
     Id:
@@ -356,6 +579,88 @@ components:
       schema:
         type: string
   schemas:
+    AppUser:
+      type: object
+      required: [id, appUserId, email, role]
+      properties:
+        id: { type: string, description: Supabase user id }
+        appUserId: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, staff, customer] }
+        customerId: { type: [string, "null"] }
+        active: { type: boolean }
+    Notification:
+      type: object
+      required: [id, title, message, type, read, createdAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        message: { type: string }
+        type: { type: string, enum: [charging_ready, charging_reminder, workspace_available, low_stock, system] }
+        read: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    CustomerChargingResponse:
+      type: object
+      required: [recentSessions]
+      properties:
+        activeSession: { oneOf: [{ $ref: "#/components/schemas/ChargingSession" }, { type: "null" }] }
+        recentSessions:
+          type: array
+          items: { $ref: "#/components/schemas/ChargingSession" }
+    Settings:
+      type: object
+      required: [id, businessName, currency, chargingCapacity, workspaceCapacity, defaultChargingPrice, defaultWorkspacePrice, businessTimezone]
+      properties:
+        id: { type: string }
+        businessName: { type: string }
+        businessAddress: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        currency: { type: string }
+        chargingCapacity: { type: number }
+        workspaceCapacity: { type: number }
+        defaultChargingPrice: { type: number }
+        defaultWorkspacePrice: { type: number }
+        whatsappGroupInviteUrl: { type: [string, "null"] }
+        businessTimezone: { type: string }
+        receiptFooter: { type: [string, "null"] }
+    SettingsInput:
+      type: object
+      required: [businessName, currency, chargingCapacity, workspaceCapacity, defaultChargingPrice, defaultWorkspacePrice, businessTimezone]
+      properties:
+        businessName: { type: string }
+        businessAddress: { type: string }
+        phone: { type: string }
+        currency: { type: string }
+        chargingCapacity: { type: number, minimum: 1 }
+        workspaceCapacity: { type: number, minimum: 1 }
+        defaultChargingPrice: { type: number, minimum: 0 }
+        defaultWorkspacePrice: { type: number, minimum: 0 }
+        whatsappGroupInviteUrl: { type: string }
+        businessTimezone: { type: string }
+        receiptFooter: { type: string }
+    RoleUpdateInput:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [admin, staff, customer] }
+    ProductUpdateInput:
+      type: object
+      properties:
+        sku: { type: string }
+        name: { type: string }
+        description: { type: string }
+        category: { type: string }
+        costPrice: { type: number, minimum: 0 }
+        sellingPrice: { type: number, minimum: 0 }
+        quantityOnHand: { type: number, minimum: 0 }
+        reorderThreshold: { type: number, minimum: 0 }
+        active: { type: boolean }
+    StockAdjustmentInput:
+      type: object
+      required: [quantity, reason]
+      properties:
+        quantity: { type: number, description: Non-zero integer adjustment }
+        reason: { type: string }
     HealthStatus:
       type: object
       properties:
@@ -633,4 +938,3 @@ components:
         sales:
           type: array
           items: { $ref: "#/components/schemas/Sale" }
-

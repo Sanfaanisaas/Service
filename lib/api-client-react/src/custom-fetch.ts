@@ -134,6 +134,15 @@ function looksLikeJson(text: string): boolean {
   return trimmed.startsWith("{") || trimmed.startsWith("[");
 }
 
+/** The SANFAANI API uses a consistent `{ success, data }` response envelope.
+ * Generated contracts describe the useful `data` value, so unwrap it once in
+ * the shared transport instead of maintaining a second API client. */
+function unwrapSanfaaniEnvelope(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const envelope = value as { success?: unknown; data?: unknown };
+  return envelope.success === true && "data" in envelope ? envelope.data : value;
+}
+
 function getStringField(value: unknown, key: string): string | undefined {
   if (!value || typeof value !== "object") return undefined;
 
@@ -367,5 +376,5 @@ export async function customFetch<T = unknown>(
     throw new ApiError(response, errorData, requestInfo);
   }
 
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  return unwrapSanfaaniEnvelope(await parseSuccessBody(response, responseType, requestInfo)) as T;
 }

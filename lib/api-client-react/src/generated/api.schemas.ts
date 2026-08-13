@@ -5,6 +5,185 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type AppUserRole = typeof AppUserRole[keyof typeof AppUserRole];
+
+
+export const AppUserRole = {
+  admin: 'admin',
+  staff: 'staff',
+  customer: 'customer',
+} as const;
+
+export interface AppUser {
+  /** Supabase user id */
+  id: string;
+  appUserId: string;
+  email: string;
+  role: AppUserRole;
+  /** @nullable */
+  customerId?: string | null;
+  active?: boolean;
+}
+
+export type NotificationType = typeof NotificationType[keyof typeof NotificationType];
+
+
+export const NotificationType = {
+  charging_ready: 'charging_ready',
+  charging_reminder: 'charging_reminder',
+  workspace_available: 'workspace_available',
+  low_stock: 'low_stock',
+  system: 'system',
+} as const;
+
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  read: boolean;
+  createdAt: string;
+}
+
+export type DeviceType = typeof DeviceType[keyof typeof DeviceType];
+
+
+export const DeviceType = {
+  phone: 'phone',
+  laptop: 'laptop',
+  tablet: 'tablet',
+  powerbank: 'powerbank',
+  other: 'other',
+} as const;
+
+export interface Device {
+  type: DeviceType;
+  /** @nullable */
+  brand?: string | null;
+  /** @nullable */
+  model?: string | null;
+  /** @nullable */
+  color?: string | null;
+  /** @nullable */
+  description?: string | null;
+}
+
+export type ChargingSessionStatus = typeof ChargingSessionStatus[keyof typeof ChargingSessionStatus];
+
+
+export const ChargingSessionStatus = {
+  'checked-in': 'checked-in',
+  charging: 'charging',
+  ready: 'ready',
+  collected: 'collected',
+  cancelled: 'cancelled',
+} as const;
+
+export type ChargingSessionPaymentStatus = typeof ChargingSessionPaymentStatus[keyof typeof ChargingSessionPaymentStatus];
+
+
+export const ChargingSessionPaymentStatus = {
+  pending: 'pending',
+  paid: 'paid',
+} as const;
+
+export interface ChargingSession {
+  id: string;
+  customerId: string;
+  customerName: string;
+  publicSessionId: string;
+  device: Device;
+  slotNumber: number;
+  timeIn: string;
+  /** @nullable */
+  estimatedReadyAt?: string | null;
+  /** @nullable */
+  readyAt?: string | null;
+  /** @nullable */
+  collectedAt?: string | null;
+  status: ChargingSessionStatus;
+  amount: number;
+  paymentStatus: ChargingSessionPaymentStatus;
+  paymentMethod?: string;
+}
+
+export interface CustomerChargingResponse {
+  activeSession?: ChargingSession | null;
+  recentSessions: ChargingSession[];
+}
+
+export interface Settings {
+  id: string;
+  businessName: string;
+  /** @nullable */
+  businessAddress?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  currency: string;
+  chargingCapacity: number;
+  workspaceCapacity: number;
+  defaultChargingPrice: number;
+  defaultWorkspacePrice: number;
+  /** @nullable */
+  whatsappGroupInviteUrl?: string | null;
+  businessTimezone: string;
+  /** @nullable */
+  receiptFooter?: string | null;
+}
+
+export interface SettingsInput {
+  businessName: string;
+  businessAddress?: string;
+  phone?: string;
+  currency: string;
+  /** @minimum 1 */
+  chargingCapacity: number;
+  /** @minimum 1 */
+  workspaceCapacity: number;
+  /** @minimum 0 */
+  defaultChargingPrice: number;
+  /** @minimum 0 */
+  defaultWorkspacePrice: number;
+  whatsappGroupInviteUrl?: string;
+  businessTimezone: string;
+  receiptFooter?: string;
+}
+
+export type RoleUpdateInputRole = typeof RoleUpdateInputRole[keyof typeof RoleUpdateInputRole];
+
+
+export const RoleUpdateInputRole = {
+  admin: 'admin',
+  staff: 'staff',
+  customer: 'customer',
+} as const;
+
+export interface RoleUpdateInput {
+  role: RoleUpdateInputRole;
+}
+
+export interface ProductUpdateInput {
+  sku?: string;
+  name?: string;
+  description?: string;
+  category?: string;
+  /** @minimum 0 */
+  costPrice?: number;
+  /** @minimum 0 */
+  sellingPrice?: number;
+  /** @minimum 0 */
+  quantityOnHand?: number;
+  /** @minimum 0 */
+  reorderThreshold?: number;
+  active?: boolean;
+}
+
+export interface StockAdjustmentInput {
+  /** Non-zero integer adjustment */
+  quantity: number;
+  reason: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -65,68 +244,6 @@ export interface ProductInput {
   quantityOnHand: number;
   /** @minimum 0 */
   reorderThreshold: number;
-}
-
-export type ChargingSessionStatus = typeof ChargingSessionStatus[keyof typeof ChargingSessionStatus];
-
-
-export const ChargingSessionStatus = {
-  'checked-in': 'checked-in',
-  charging: 'charging',
-  ready: 'ready',
-  collected: 'collected',
-  cancelled: 'cancelled',
-} as const;
-
-export type ChargingSessionPaymentStatus = typeof ChargingSessionPaymentStatus[keyof typeof ChargingSessionPaymentStatus];
-
-
-export const ChargingSessionPaymentStatus = {
-  pending: 'pending',
-  paid: 'paid',
-} as const;
-
-export type DeviceType = typeof DeviceType[keyof typeof DeviceType];
-
-
-export const DeviceType = {
-  phone: 'phone',
-  laptop: 'laptop',
-  tablet: 'tablet',
-  powerbank: 'powerbank',
-  other: 'other',
-} as const;
-
-export interface Device {
-  type: DeviceType;
-  /** @nullable */
-  brand?: string | null;
-  /** @nullable */
-  model?: string | null;
-  /** @nullable */
-  color?: string | null;
-  /** @nullable */
-  description?: string | null;
-}
-
-export interface ChargingSession {
-  id: string;
-  customerId: string;
-  customerName: string;
-  publicSessionId: string;
-  device: Device;
-  slotNumber: number;
-  timeIn: string;
-  /** @nullable */
-  estimatedReadyAt?: string | null;
-  /** @nullable */
-  readyAt?: string | null;
-  /** @nullable */
-  collectedAt?: string | null;
-  status: ChargingSessionStatus;
-  amount: number;
-  paymentStatus: ChargingSessionPaymentStatus;
-  paymentMethod?: string;
 }
 
 export type ChargingCheckInInputDeviceType = typeof ChargingCheckInInputDeviceType[keyof typeof ChargingCheckInInputDeviceType];
@@ -394,5 +511,18 @@ export const ListHistoryType = {
   workspace: 'workspace',
   sales: 'sales',
   transactions: 'transactions',
+} as const;
+
+export type GetCustomerMyChargingParams = {
+view?: GetCustomerMyChargingView;
+};
+
+export type GetCustomerMyChargingView = typeof GetCustomerMyChargingView[keyof typeof GetCustomerMyChargingView];
+
+
+export const GetCustomerMyChargingView = {
+  active: 'active',
+  history: 'history',
+  latest: 'latest',
 } as const;
 
