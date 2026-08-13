@@ -1,0 +1,22 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
+import { env } from './config/env.js';
+import { authenticate } from './middleware/auth.js';
+import { errorHandler, notFound } from './lib/errors.js';
+import { operations } from './routes/operations.js';
+import { reporting } from './routes/reporting.js';
+import { push } from './routes/push.js';
+
+export const app = express();
+app.disable('x-powered-by');
+app.use(helmet({ contentSecurityPolicy: env.NODE_ENV === 'production' ? undefined : false }));
+app.use(cors({ origin: env.CLIENT_URL, credentials: true }));
+app.use(express.json({ limit: '250kb' }));
+app.use(express.urlencoded({ extended: false, limit: '250kb' }));
+app.use('/api', rateLimit({ windowMs: 60_000, limit: 180, standardHeaders: 'draft-8', legacyHeaders: false }));
+app.get('/api/health', (_req, res) => res.json({ success: true, data: { status: 'ok' } }));
+app.use('/api', authenticate, reporting, push, operations);
+app.use(notFound);
+app.use(errorHandler);

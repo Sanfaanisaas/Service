@@ -1,73 +1,16 @@
-import path from 'path';
+import path from 'node:path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
-import { mockupPreviewPlugin } from './mockupPreviewPlugin';
-
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    'PORT environment variable is required but was not provided.',
-  );
-}
-
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    'BASE_PATH environment variable is required but was not provided.',
-  );
-}
 
 export default defineConfig({
-  base: basePath,
-  plugins: [
-    react(),
-    tailwindcss(),
-    mockupPreviewPlugin(),
-  ],
-  resolve: {
-    alias: {
-      '@': path.resolve(import.meta.dirname, 'src'),
-      '@assets': path.resolve(
-        import.meta.dirname,
-        '..',
-        '..',
-        'attached_assets',
-      ),
-    },
-    dedupe: ['react', 'react-dom'],
-  },
-  root: path.resolve(import.meta.dirname),
-  build: {
-    outDir: path.resolve(import.meta.dirname, 'dist/public'),
-    emptyOutDir: true,
-  },
+  base: process.env.BASE_PATH || '/',
+  plugins: [react(), tailwindcss()],
+  resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src'), '@shared': path.resolve(import.meta.dirname, 'shared') } },
+  build: { outDir: 'dist/client', emptyOutDir: true },
   server: {
-    port,
-    strictPort: true,
-    host: '0.0.0.0',
-    allowedHosts: true,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-      },
-    },
-    fs: {
-      strict: true,
-    },
+    port: Number(process.env.PORT || 3000), strictPort: true, host: '0.0.0.0', allowedHosts: true,
+    proxy: { '/api': { target: 'http://localhost:5000', changeOrigin: true } },
   },
-  preview: {
-    port,
-    host: '0.0.0.0',
-    allowedHosts: true,
-  },
+  preview: { port: Number(process.env.PORT || 3000), host: '0.0.0.0', allowedHosts: true },
 });
