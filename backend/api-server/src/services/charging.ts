@@ -3,9 +3,10 @@ import type { z } from 'zod';
 import type { chargingCheckInInput } from '../contracts.js';
 import { claimId, secureToken } from '../lib/ids.js';
 import { ApiError } from '../lib/errors.js';
-import { ChargingSession, Notification, ResourceLock } from '../models/index.js';
+import { ChargingSession, Customer, Notification, ResourceLock } from '../models/index.js';
 import { audit, customerByPhone, releasePosition, reservePosition, settings, assertTransition } from './common.js';
 import { generateReceipt, recordIncome } from './ledger.js';
+import { sendCustomerPush } from './push.js';
 
 type Input = z.infer<typeof chargingCheckInInput>;
 
@@ -56,6 +57,13 @@ export async function updateStatus(id: string, next: 'charging'|'ready'|'cancell
       message: `Your device should now be ready for collection. Claim ID: ${current.publicSessionId}`,
       type: 'charging_ready',
     });
+    const customer = await Customer.findById(current.customerId);
+    if (customer?.notificationPreferences?.push && customer.notificationPreferences?.chargingReminders !== false) {
+      await sendCustomerPush(current.customerId, {
+        title: 'SANFAANI', body: 'Your device is ready for collection.',
+        url: '/customer/device', tag: `charging-ready-${current.id}`,
+      });
+    }
   }
   if (next === 'cancelled') await releasePosition('charging', current.id);
   await audit(actorId, next === 'ready' ? 'CHARGING_MARKED_READY' : 'CHARGING_STATUS_UPDATED', 'charging_session', current.id);
@@ -66,7 +74,11 @@ export async function collect(id: string, presentedClaimId: string, actorId: str
   const session = await mongoose.startSession();
   try {
     return await session.withTransaction(async () => {
-      const current = await ChargingSession.findOne({ _id: id, publicSessionId: presentedClaimId }).session(session);
+      const current = await ChargingSession.findOne({
+        _id: id,
+        status: 'ready',
+        $or: [{ publicSessionId: presentedClaimId }, { secureClaimToken: presentedClaimId }],
+      }).session(session);
       if (!current) throw new ApiError(404, 'CLAIM_NOT_VERIFIED', 'The claim ID could not be verified.');
       assertTransition(current.status, 'collected');
       current.status = 'collected'; current.collectedAt = new Date();
@@ -76,4 +88,21 @@ export async function collect(id: string, presentedClaimId: string, actorId: str
       return current;
     });
   } finally { await session.endSession(); }
+}
+
+export async function verifyClaim(token: string) {
+  const current = await ChargingSession.findOne({ secureClaimToken: token }).select('+secureClaimToken');
+  if (!current) throw new ApiError(404, 'CLAIM_NOT_VERIFIED', 'The secure claim could not be verified.');
+  if (current.status === 'collected') throw new ApiError(409, 'CLAIM_ALREADY_USED', 'This claim has already been collected.');
+  if (current.status !== 'ready') throw new ApiError(409, 'DEVICE_NOT_READY', 'This device is not ready for collection.');
+  return {
+    sessionId: current.id,
+    claimId: current.publicSessionId,
+    customerName: current.customerName,
+    device: current.device,
+    slotNumber: current.slotNumber,
+    status: current.status,
+    readyAt: current.readyAt,
+    eligibleForCollection: true,
+  };
 }

@@ -147,6 +147,9 @@ describe('customer ownership', () => {
     const receipts = await api().get('/api/customer/me/receipts').set(auth('customerA')).expect(200);
     expect(receipts.body.data).toHaveLength(2);
     expect(receipts.body.data.every((receipt: { customerId: string }) => receipt.customerId === customerA.id)).toBe(true);
+    const ownedReceipt = await api().get(`/api/customer/me/receipts/${receipts.body.data[0].id}`).set(auth('customerA')).expect(200);
+    expect(ownedReceipt.body.data.id).toBe(receipts.body.data[0].id);
+    await api().get(`/api/customer/me/receipts/${receipts.body.data[0].id}`).set(auth('customerB')).expect(404);
     const notifications = await api().get('/api/customer/me/notifications').set(auth('customerA')).expect(200);
     expect(notifications.body.data).toHaveLength(1);
     const marked = await api().patch(`/api/customer/me/notifications/${notifications.body.data[0].id}/read`).set(auth('customerA')).expect(200);
@@ -154,7 +157,56 @@ describe('customer ownership', () => {
   });
 });
 
+describe('browser push subscriptions', () => {
+  it('stores and removes only the authenticated customer browser subscription', async () => {
+    const customer = await provisionCustomer('customerA', '08000000019');
+    const subscription = { endpoint: 'https://push.example.test/customer-a', keys: { p256dh: 'public-key', auth: 'auth-key' } };
+    const created = await api().post('/api/push/subscriptions').set(auth('customerA')).send(subscription).expect(201);
+    expect(created.body.data).toEqual({ enabled: true });
+    expect(await models.PushSubscription.countDocuments({ customerId: customer.id })).toBe(1);
+    expect((await models.Customer.findById(customer.id))?.notificationPreferences?.push).toBe(true);
+    await api().delete('/api/push/subscriptions').set(auth('customerB')).send({ endpoint: subscription.endpoint }).expect(200);
+    expect(await models.PushSubscription.countDocuments({ customerId: customer.id })).toBe(1);
+    await api().delete('/api/push/subscriptions').set(auth('customerA')).send({ endpoint: subscription.endpoint }).expect(200);
+    expect(await models.PushSubscription.countDocuments({ customerId: customer.id })).toBe(0);
+    expect((await models.Customer.findById(customer.id))?.notificationPreferences?.push).toBe(false);
+  });
+});
+
+describe('customer profile and consent', () => {
+  it('persists valid profile edits and keeps each consent independent', async () => {
+    await provisionCustomer('customerA', '08000000029');
+    const updated = await api().patch('/api/customer/me').set(auth('customerA')).send({
+      name: 'Customer Alpha', phone: '+234 800 000 0029', whatsappOptIn: true,
+      notificationPreferences: { inApp: false, chargingReminders: true, workspaceAvailability: false },
+    }).expect(200);
+    expect(updated.body.data).toMatchObject({ name: 'Customer Alpha', phone: '+234 800 000 0029', whatsappOptIn: true, accountStatus: 'active' });
+    expect(updated.body.data.notificationPreferences).toMatchObject({ push: false, inApp: false, chargingReminders: true, workspaceAvailability: false });
+    await api().patch('/api/customer/me').set(auth('customerA')).send({
+      name: 'Customer Alpha', phone: 'invalid', whatsappOptIn: false,
+      notificationPreferences: { inApp: true, chargingReminders: false, workspaceAvailability: true },
+    }).expect(400);
+    const persisted = await api().get('/api/customer/me').set(auth('customerA')).expect(200);
+    expect(persisted.body.data.phone).toBe('+234 800 000 0029');
+  });
+});
+
 describe('atomic operations and financial records', () => {
+  it('verifies the secure QR credential and rejects it after one collection', async () => {
+    await provision('staff', 'staff');
+    const created = await checkIn('08000000021', 'secure-claim').expect(201);
+    const session = await models.ChargingSession.findById(created.body.data.session.id).select('+secureClaimToken');
+    const token = session?.get('secureClaimToken') as string;
+    expect(token).toHaveLength(43);
+    await api().patch(`/api/charging/${session!.id}/status`).set(auth('staff')).send({ status: 'ready' }).expect(200);
+    const verified = await api().post('/api/charging/verify-claim').set(auth('staff')).send({ token }).expect(200);
+    expect(verified.body.data).toMatchObject({ sessionId: session!.id, eligibleForCollection: true, status: 'ready' });
+    expect(verified.body.data.secureClaimToken).toBeUndefined();
+    await api().post(`/api/charging/${session!.id}/collect`).set(auth('staff')).send({ claimId: token }).expect(200);
+    await api().post('/api/charging/verify-claim').set(auth('staff')).send({ token }).expect(409);
+    await api().post(`/api/charging/${session!.id}/collect`).set(auth('staff')).send({ claimId: token }).expect(404);
+  });
+
   it('admits 40 active charging sessions, rejects the 41st, never duplicates a slot, and frees a collected slot', async () => {
     await provision('staff', 'staff');
     await updateSettings({ chargingCapacity: 40 });

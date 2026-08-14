@@ -6,9 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface NotificationPreferences {
-  push: boolean;
+export type CustomerProfileInputNotificationPreferences = {
   inApp: boolean;
   chargingReminders: boolean;
   workspaceAvailability: boolean;
-}
+};

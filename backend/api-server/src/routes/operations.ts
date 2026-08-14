@@ -1,7 +1,8 @@
 import { Router, type Request } from 'express';
+import { isValidObjectId } from 'mongoose';
 import { z } from 'zod';
 import {
-  chargingCheckInInput, customerInput, productInput, productUpdateInput, saleInput, settingsInput, stockAdjustmentInput, workspaceInput,
+  chargingCheckInInput, customerInput, customerProfileInput, productInput, productUpdateInput, saleInput, settingsInput, stockAdjustmentInput, workspaceInput,
 } from '../contracts.js';
 import { allow } from '../middleware/auth.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
@@ -9,7 +10,7 @@ import {
   AppUser, ChargingSession, Customer, InventoryMovement, Notification, Product, Receipt, Sale,
   Setting, Transaction, WorkspaceBooking,
 } from '../models/index.js';
-import { checkIn, collect, updateStatus } from '../services/charging.js';
+import { checkIn, collect, updateStatus, verifyClaim } from '../services/charging.js';
 import { createProduct, adjustStock, createSale } from '../services/inventory.js';
 import { checkInWorkspace, checkOutWorkspace, registerWorkspace } from '../services/workspace.js';
 import { ACTIVE_CHARGING, ACTIVE_WORKSPACE, audit, settings } from '../services/common.js';
@@ -24,6 +25,9 @@ const customerId = (req: Request) => {
   return id;
 };
 const routeParam = (value: string | string[] | undefined) => z.string().min(1).parse(value);
+const receiptLookup = (value: string) => isValidObjectId(value)
+  ? { $or: [{ _id: value }, { receiptNumber: value }] }
+  : { receiptNumber: value };
 const appUserResponse = (user: InstanceType<typeof AppUser>) => ({
   id: user.get('supabaseUserId') as string,
   appUserId: user.id,
@@ -34,6 +38,12 @@ const appUserResponse = (user: InstanceType<typeof AppUser>) => ({
   customerId: user.get('customerId')?.toString() ?? null,
   createdAt: user.get('createdAt') instanceof Date ? user.get('createdAt').toISOString() : undefined,
 });
+const receiptDetail = async (receipt: InstanceType<typeof Receipt>) => {
+  const value = receipt.toJSON() as Record<string, unknown>;
+  if (receipt.type !== 'charging') return value;
+  const charging = await ChargingSession.findById(receipt.referenceId).select('+secureClaimToken');
+  return { ...value, claimToken: charging?.get('secureClaimToken') as string | undefined };
+};
 
 operations.get('/me', asyncHandler(async (req, res) => {
   res.json({ success: true, data: req.authUser });
@@ -44,7 +54,26 @@ operations.get('/me', asyncHandler(async (req, res) => {
 operations.get('/customer/me', allow('customer'), asyncHandler(async (req, res) => {
   const customer = await Customer.findById(customerId(req));
   if (!customer) throw new ApiError(404, 'CUSTOMER_NOT_FOUND', 'Customer profile not found.');
-  res.json({ success: true, data: customer });
+  res.json({ success: true, data: { ...customer.toJSON(), accountStatus: req.authUser!.active ? 'active' : 'inactive' } });
+}));
+operations.patch('/customer/me', allow('customer'), asyncHandler(async (req, res) => {
+  const input = customerProfileInput.parse(req.body);
+  const customer = await Customer.findById(customerId(req));
+  if (!customer) throw new ApiError(404, 'CUSTOMER_NOT_FOUND', 'Customer profile not found.');
+  customer.name = input.name;
+  customer.phone = input.phone;
+  customer.whatsappOptIn = input.whatsappOptIn;
+  customer.set('notificationPreferences.inApp', input.notificationPreferences.inApp);
+  customer.set('notificationPreferences.chargingReminders', input.notificationPreferences.chargingReminders);
+  customer.set('notificationPreferences.workspaceAvailability', input.notificationPreferences.workspaceAvailability);
+  await customer.save();
+  await AppUser.updateOne({ _id: req.authUser!.appUserId }, { name: customer.name });
+  await audit(req.authUser!.id, 'CUSTOMER_PROFILE_UPDATED', 'customer', customer.id, {
+    whatsappOptIn: customer.whatsappOptIn,
+    chargingReminders: customer.get('notificationPreferences.chargingReminders') as boolean,
+    workspaceAvailability: customer.get('notificationPreferences.workspaceAvailability') as boolean,
+  });
+  res.json({ success: true, data: { ...customer.toJSON(), accountStatus: 'active' } });
 }));
 operations.get('/customer/me/charging', allow('customer'), asyncHandler(async (req, res) => {
   const id = customerId(req);
@@ -70,6 +99,14 @@ operations.get('/customer/me/workspace', allow('customer'), asyncHandler(async (
 }));
 operations.get('/customer/me/receipts', allow('customer'), asyncHandler(async (req, res) => {
   res.json({ success: true, data: await Receipt.find({ customerId: customerId(req) }).sort({ generatedAt: -1 }).limit(200) });
+}));
+operations.get('/customer/me/receipts/:id', allow('customer'), asyncHandler(async (req, res) => {
+  const receipt = await Receipt.findOne({
+    customerId: customerId(req),
+    ...receiptLookup(routeParam(req.params.id)),
+  });
+  if (!receipt) throw new ApiError(404, 'RECEIPT_NOT_FOUND', 'Receipt not found.');
+  res.json({ success: true, data: await receiptDetail(receipt) });
 }));
 operations.get('/customer/me/notifications', allow('customer'), asyncHandler(async (req, res) => {
   res.json({ success: true, data: await Notification.find({ customerId: customerId(req) }).sort({ createdAt: -1 }).limit(100) });
@@ -122,6 +159,10 @@ operations.post('/charging/:id/ready', staff, asyncHandler(async (req, res) => {
 operations.post('/charging/:id/collect', staff, asyncHandler(async (req, res) => {
   const { claimId } = z.object({ claimId: z.string().min(10) }).parse(req.body);
   res.json({ success: true, data: await collect(routeParam(req.params.id), claimId, req.authUser!.id) });
+}));
+operations.post('/charging/verify-claim', staff, asyncHandler(async (req, res) => {
+  const { token } = z.object({ token: z.string().min(32).max(256) }).parse(req.body);
+  res.json({ success: true, data: await verifyClaim(token) });
 }));
 
 operations.get('/workspace', staff, asyncHandler(async (_req, res) => {
@@ -197,9 +238,9 @@ operations.get('/receipts', staff, asyncHandler(async (_req, res) => {
   res.json({ success: true, data: await Receipt.find().sort({ generatedAt: -1 }).limit(200) });
 }));
 operations.get('/receipts/:id', staff, asyncHandler(async (req, res) => {
-  const receipt = await Receipt.findOne({ $or: [{ _id: req.params.id }, { receiptNumber: req.params.id }] });
+  const receipt = await Receipt.findOne(receiptLookup(routeParam(req.params.id)));
   if (!receipt) throw new ApiError(404, 'RECEIPT_NOT_FOUND', 'Receipt not found.');
-  res.json({ success: true, data: receipt });
+  res.json({ success: true, data: await receiptDetail(receipt) });
 }));
 
 operations.get('/notifications', staff, asyncHandler(async (req, res) => {

@@ -88,15 +88,21 @@ export const ListCustomersQueryParams = zod.object({
   "search": zod.coerce.string().optional()
 })
 
+export const listCustomersResponseNotificationPreferencesChargingRemindersDefault = true;
+export const listCustomersResponseNotificationPreferencesWorkspaceAvailabilityDefault = false;
+
 export const ListCustomersResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "phone": zod.string().nullish(),
   "email": zod.string().nullish(),
+  "accountStatus": zod.enum(['active', 'inactive']).optional(),
   "whatsappOptIn": zod.boolean(),
   "notificationPreferences": zod.object({
   "push": zod.boolean(),
-  "inApp": zod.boolean()
+  "inApp": zod.boolean(),
+  "chargingReminders": zod.boolean().default(listCustomersResponseNotificationPreferencesChargingRemindersDefault),
+  "workspaceAvailability": zod.boolean().default(listCustomersResponseNotificationPreferencesWorkspaceAvailabilityDefault)
 }),
   "createdAt": zod.coerce.date()
 })
@@ -108,7 +114,8 @@ export const ListCustomersResponse = zod.array(ListCustomersResponseItem)
  */
 export const createCustomerBodyNameMin = 2;
 
-
+export const createCustomerBodyNotificationPreferencesChargingRemindersDefault = true;
+export const createCustomerBodyNotificationPreferencesWorkspaceAvailabilityDefault = false;
 
 export const CreateCustomerBody = zod.object({
   "name": zod.string().min(createCustomerBodyNameMin),
@@ -117,19 +124,27 @@ export const CreateCustomerBody = zod.object({
   "whatsappOptIn": zod.boolean().optional(),
   "notificationPreferences": zod.object({
   "push": zod.boolean(),
-  "inApp": zod.boolean()
+  "inApp": zod.boolean(),
+  "chargingReminders": zod.boolean().default(createCustomerBodyNotificationPreferencesChargingRemindersDefault),
+  "workspaceAvailability": zod.boolean().default(createCustomerBodyNotificationPreferencesWorkspaceAvailabilityDefault)
 }).optional()
 })
+
+export const createCustomerResponseNotificationPreferencesChargingRemindersDefault = true;
+export const createCustomerResponseNotificationPreferencesWorkspaceAvailabilityDefault = false;
 
 export const CreateCustomerResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "phone": zod.string().nullish(),
   "email": zod.string().nullish(),
+  "accountStatus": zod.enum(['active', 'inactive']).optional(),
   "whatsappOptIn": zod.boolean(),
   "notificationPreferences": zod.object({
   "push": zod.boolean(),
-  "inApp": zod.boolean()
+  "inApp": zod.boolean(),
+  "chargingReminders": zod.boolean().default(createCustomerResponseNotificationPreferencesChargingRemindersDefault),
+  "workspaceAvailability": zod.boolean().default(createCustomerResponseNotificationPreferencesWorkspaceAvailabilityDefault)
 }),
   "createdAt": zod.coerce.date()
 })
@@ -219,11 +234,43 @@ export const CheckInChargingSessionResponse = zod.object({
   "customerName": zod.string().nullish(),
   "referenceId": zod.string().optional(),
   "claimId": zod.string().nullish(),
+  "claimToken": zod.string().nullish().describe('Authorized receipt detail only; omitted from lists'),
   "subtotal": zod.number(),
   "total": zod.number(),
   "paymentMethod": zod.string(),
+  "details": zod.record(zod.string(), zod.unknown()).nullish(),
   "generatedAt": zod.coerce.date()
 })
+})
+
+
+/**
+ * @summary Verify a secure charging claim before collection
+ */
+export const verifyChargingClaimBodyTokenMin = 32;
+export const verifyChargingClaimBodyTokenMax = 256;
+
+
+
+export const VerifyChargingClaimBody = zod.object({
+  "token": zod.string().min(verifyChargingClaimBodyTokenMin).max(verifyChargingClaimBodyTokenMax)
+})
+
+export const VerifyChargingClaimResponse = zod.object({
+  "sessionId": zod.string(),
+  "claimId": zod.string(),
+  "customerName": zod.string().nullish(),
+  "device": zod.object({
+  "type": zod.enum(['phone', 'laptop', 'tablet', 'powerbank', 'other']),
+  "brand": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "description": zod.string().nullish()
+}),
+  "slotNumber": zod.number(),
+  "status": zod.enum(['ready']),
+  "readyAt": zod.coerce.date().nullish(),
+  "eligibleForCollection": zod.boolean()
 })
 
 
@@ -374,9 +421,11 @@ export const RegisterWorkspaceBookingResponse = zod.object({
   "customerName": zod.string().nullish(),
   "referenceId": zod.string().optional(),
   "claimId": zod.string().nullish(),
+  "claimToken": zod.string().nullish().describe('Authorized receipt detail only; omitted from lists'),
   "subtotal": zod.number(),
   "total": zod.number(),
   "paymentMethod": zod.string(),
+  "details": zod.record(zod.string(), zod.unknown()).nullish(),
   "generatedAt": zod.coerce.date()
 }),zod.null()]).optional(),
   "whatsappGroupInviteUrl": zod.string().nullish()
@@ -548,9 +597,11 @@ export const CreateSaleResponse = zod.object({
   "customerName": zod.string().nullish(),
   "referenceId": zod.string().optional(),
   "claimId": zod.string().nullish(),
+  "claimToken": zod.string().nullish().describe('Authorized receipt detail only; omitted from lists'),
   "subtotal": zod.number(),
   "total": zod.number(),
   "paymentMethod": zod.string(),
+  "details": zod.record(zod.string(), zod.unknown()).nullish(),
   "generatedAt": zod.coerce.date()
 })
 })
@@ -585,9 +636,11 @@ export const ListReceiptsResponseItem = zod.object({
   "customerName": zod.string().nullish(),
   "referenceId": zod.string().optional(),
   "claimId": zod.string().nullish(),
+  "claimToken": zod.string().nullish().describe('Authorized receipt detail only; omitted from lists'),
   "subtotal": zod.number(),
   "total": zod.number(),
   "paymentMethod": zod.string(),
+  "details": zod.record(zod.string(), zod.unknown()).nullish(),
   "generatedAt": zod.coerce.date()
 })
 export const ListReceiptsResponse = zod.array(ListReceiptsResponseItem)
@@ -756,15 +809,65 @@ export const GetCurrentUserResponse = zod.object({
 /**
  * @summary Get the authenticated customer's profile
  */
+export const getCustomerMeResponseNotificationPreferencesChargingRemindersDefault = true;
+export const getCustomerMeResponseNotificationPreferencesWorkspaceAvailabilityDefault = false;
+
 export const GetCustomerMeResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "phone": zod.string().nullish(),
   "email": zod.string().nullish(),
+  "accountStatus": zod.enum(['active', 'inactive']).optional(),
   "whatsappOptIn": zod.boolean(),
   "notificationPreferences": zod.object({
   "push": zod.boolean(),
-  "inApp": zod.boolean()
+  "inApp": zod.boolean(),
+  "chargingReminders": zod.boolean().default(getCustomerMeResponseNotificationPreferencesChargingRemindersDefault),
+  "workspaceAvailability": zod.boolean().default(getCustomerMeResponseNotificationPreferencesWorkspaceAvailabilityDefault)
+}),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update the authenticated customer's profile and independent preferences
+ */
+export const updateCustomerMeBodyNameMin = 2;
+export const updateCustomerMeBodyNameMax = 120;
+
+export const updateCustomerMeBodyPhoneMin = 7;
+export const updateCustomerMeBodyPhoneMax = 24;
+
+
+export const updateCustomerMeBodyPhoneRegExp = new RegExp('^\\\\+?[0-9][0-9\\\\s-]{6,23}$');
+
+
+export const UpdateCustomerMeBody = zod.object({
+  "name": zod.string().min(updateCustomerMeBodyNameMin).max(updateCustomerMeBodyNameMax),
+  "phone": zod.string().min(updateCustomerMeBodyPhoneMin).max(updateCustomerMeBodyPhoneMax).regex(updateCustomerMeBodyPhoneRegExp),
+  "whatsappOptIn": zod.boolean(),
+  "notificationPreferences": zod.object({
+  "inApp": zod.boolean(),
+  "chargingReminders": zod.boolean(),
+  "workspaceAvailability": zod.boolean()
+})
+})
+
+export const updateCustomerMeResponseNotificationPreferencesChargingRemindersDefault = true;
+export const updateCustomerMeResponseNotificationPreferencesWorkspaceAvailabilityDefault = false;
+
+export const UpdateCustomerMeResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "accountStatus": zod.enum(['active', 'inactive']).optional(),
+  "whatsappOptIn": zod.boolean(),
+  "notificationPreferences": zod.object({
+  "push": zod.boolean(),
+  "inApp": zod.boolean(),
+  "chargingReminders": zod.boolean().default(updateCustomerMeResponseNotificationPreferencesChargingRemindersDefault),
+  "workspaceAvailability": zod.boolean().default(updateCustomerMeResponseNotificationPreferencesWorkspaceAvailabilityDefault)
 }),
   "createdAt": zod.coerce.date()
 })
@@ -858,12 +961,37 @@ export const GetCustomerMyReceiptsResponseItem = zod.object({
   "customerName": zod.string().nullish(),
   "referenceId": zod.string().optional(),
   "claimId": zod.string().nullish(),
+  "claimToken": zod.string().nullish().describe('Authorized receipt detail only; omitted from lists'),
   "subtotal": zod.number(),
   "total": zod.number(),
   "paymentMethod": zod.string(),
+  "details": zod.record(zod.string(), zod.unknown()).nullish(),
   "generatedAt": zod.coerce.date()
 })
 export const GetCustomerMyReceiptsResponse = zod.array(GetCustomerMyReceiptsResponseItem)
+
+
+/**
+ * @summary Get one receipt owned by the authenticated customer
+ */
+export const GetCustomerMyReceiptDetailParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetCustomerMyReceiptDetailResponse = zod.object({
+  "id": zod.string(),
+  "receiptNumber": zod.string(),
+  "type": zod.enum(['sale', 'charging', 'workspace']),
+  "customerName": zod.string().nullish(),
+  "referenceId": zod.string().optional(),
+  "claimId": zod.string().nullish(),
+  "claimToken": zod.string().nullish().describe('Authorized receipt detail only; omitted from lists'),
+  "subtotal": zod.number(),
+  "total": zod.number(),
+  "paymentMethod": zod.string(),
+  "details": zod.record(zod.string(), zod.unknown()).nullish(),
+  "generatedAt": zod.coerce.date()
+})
 
 
 /**
@@ -894,6 +1022,42 @@ export const MarkCustomerNotificationReadResponse = zod.object({
   "type": zod.enum(['charging_ready', 'charging_reminder', 'workspace_available', 'low_stock', 'system']),
   "read": zod.boolean(),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get the browser push VAPID public key
+ */
+export const GetPushPublicKeyResponse = zod.object({
+  "publicKey": zod.string().nullable()
+})
+
+
+/**
+ * @summary Store a deliberate browser push subscription
+ */
+export const CreatePushSubscriptionBody = zod.object({
+  "endpoint": zod.url(),
+  "keys": zod.object({
+  "p256dh": zod.string(),
+  "auth": zod.string()
+})
+})
+
+export const CreatePushSubscriptionResponse = zod.object({
+  "enabled": zod.boolean()
+})
+
+
+/**
+ * @summary Remove this browser's push subscription
+ */
+export const DeletePushSubscriptionBody = zod.object({
+  "endpoint": zod.url()
+})
+
+export const DeletePushSubscriptionResponse = zod.object({
+  "enabled": zod.boolean()
 })
 
 
@@ -1134,9 +1298,11 @@ export const GetReceiptDetailResponse = zod.object({
   "customerName": zod.string().nullish(),
   "referenceId": zod.string().optional(),
   "claimId": zod.string().nullish(),
+  "claimToken": zod.string().nullish().describe('Authorized receipt detail only; omitted from lists'),
   "subtotal": zod.number(),
   "total": zod.number(),
   "paymentMethod": zod.string(),
+  "details": zod.record(zod.string(), zod.unknown()).nullish(),
   "generatedAt": zod.coerce.date()
 })
 

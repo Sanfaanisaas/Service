@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ReceiptDetails } from './receiptDetails';
 import type { ReceiptType } from './receiptType';
 
 export interface Receipt {
@@ -16,8 +17,15 @@ export interface Receipt {
   referenceId?: string;
   /** @nullable */
   claimId?: string | null;
+  /**
+     * Authorized receipt detail only; omitted from lists
+     * @nullable
+     */
+  claimToken?: string | null;
   subtotal: number;
   total: number;
   paymentMethod: string;
+  /** @nullable */
+  details?: ReceiptDetails;
   generatedAt: Date;
 }

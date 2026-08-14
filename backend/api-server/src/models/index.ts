@@ -19,7 +19,11 @@ const customerSchema = new Schema({
   phone: { type: String, trim: true, index: true, sparse: true },
   email: { type: String, lowercase: true, trim: true, index: true, unique: true, sparse: true },
   whatsappOptIn: { type: Boolean, default: false },
-  notificationPreferences: { push: { type: Boolean, default: false }, inApp: { type: Boolean, default: true } },
+  notificationPreferences: {
+    push: { type: Boolean, default: false }, inApp: { type: Boolean, default: true },
+    chargingReminders: { type: Boolean, default: true }, workspaceAvailability: { type: Boolean, default: false },
+  },
+  lastWorkspaceNotificationAt: Date,
 }, options);
 
 const productSchema = new Schema({

@@ -3,6 +3,15 @@
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
 
+@media print {
+  @page { margin: 12mm; }
+  body { background: white !important; }
+  body * { visibility: hidden !important; }
+  .receipt-print, .receipt-print * { visibility: visible !important; }
+  .receipt-print { position: absolute; inset: 0; width: 100%; max-width: none !important; box-shadow: none !important; }
+  .receipt-actions { display: none !important; }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

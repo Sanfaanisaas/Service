@@ -117,6 +117,26 @@ paths:
                 $ref: "#/components/schemas/ChargingCheckInResult"
         "409":
           description: Capacity reached or slot conflict
+  /charging/verify-claim:
+    post:
+      operationId: verifyChargingClaim
+      tags: [charging]
+      summary: Verify a secure charging claim before collection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimVerificationInput"
+      responses:
+        "200":
+          description: Minimal staff collection verification details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimVerificationResult"
+        "409":
+          description: Claim already used or device not ready
   /charging/{id}/status:
     patch:
       operationId: updateChargingStatus
@@ -377,6 +397,21 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Customer" }
+    patch:
+      operationId: updateCustomerMe
+      tags: [customer]
+      summary: Update the authenticated customer's profile and independent preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerProfileInput" }
+      responses:
+        "200":
+          description: Updated customer profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
   /customer/me/charging:
     get:
       operationId: getCustomerMyCharging
@@ -418,6 +453,19 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/Receipt" }
+  /customer/me/receipts/{id}:
+    get:
+      operationId: getCustomerMyReceiptDetail
+      tags: [customer, receipts]
+      summary: Get one receipt owned by the authenticated customer
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Owned customer receipt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Receipt" }
   /customer/me/notifications:
     get:
       operationId: getCustomerMyNotifications
@@ -444,6 +492,48 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Notification" }
+  /push/public-key:
+    get:
+      operationId: getPushPublicKey
+      tags: [notifications]
+      summary: Get the browser push VAPID public key
+      responses:
+        "200":
+          description: Public browser push configuration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PushPublicKey" }
+  /push/subscriptions:
+    post:
+      operationId: createPushSubscription
+      tags: [notifications]
+      summary: Store a deliberate browser push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PushSubscriptionInput" }
+      responses:
+        "201":
+          description: Subscription stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PushSubscriptionState" }
+    delete:
+      operationId: deletePushSubscription
+      tags: [notifications]
+      summary: Remove this browser's push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PushUnsubscribeInput" }
+      responses:
+        "200":
+          description: Subscription removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PushSubscriptionState" }
   /notifications:
     get:
       operationId: listNotifications
@@ -708,6 +798,7 @@ components:
         name: { type: string }
         phone: { type: ["string", "null"] }
         email: { type: ["string", "null"] }
+        accountStatus: { type: string, enum: [active, inactive] }
         whatsappOptIn: { type: boolean }
         notificationPreferences:
           $ref: "#/components/schemas/NotificationPreferences"
@@ -722,12 +813,54 @@ components:
         whatsappOptIn: { type: boolean }
         notificationPreferences:
           $ref: "#/components/schemas/NotificationPreferences"
+    CustomerProfileInput:
+      type: object
+      required: [name, phone, whatsappOptIn, notificationPreferences]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        phone: { type: string, minLength: 7, maxLength: 24, pattern: '^\\+?[0-9][0-9\\s-]{6,23}$' }
+        whatsappOptIn: { type: boolean }
+        notificationPreferences:
+          type: object
+          required: [inApp, chargingReminders, workspaceAvailability]
+          properties:
+            inApp: { type: boolean }
+            chargingReminders: { type: boolean }
+            workspaceAvailability: { type: boolean }
     NotificationPreferences:
       type: object
-      required: [push, inApp]
+      required: [push, inApp, chargingReminders, workspaceAvailability]
       properties:
         push: { type: boolean }
         inApp: { type: boolean }
+        chargingReminders: { type: boolean, default: true }
+        workspaceAvailability: { type: boolean, default: false }
+    PushPublicKey:
+      type: object
+      required: [publicKey]
+      properties:
+        publicKey: { type: [string, "null"] }
+    PushSubscriptionInput:
+      type: object
+      required: [endpoint, keys]
+      properties:
+        endpoint: { type: string, format: uri }
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh: { type: string }
+            auth: { type: string }
+    PushSubscriptionState:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+    PushUnsubscribeInput:
+      type: object
+      required: [endpoint]
+      properties:
+        endpoint: { type: string, format: uri }
     Product:
       type: object
       required: [id, sku, name, category, costPrice, sellingPrice, quantityOnHand, reorderThreshold, active, updatedAt]
@@ -825,6 +958,23 @@ components:
       required: [claimId]
       properties:
         claimId: { type: string, minLength: 8 }
+    ClaimVerificationInput:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, minLength: 32, maxLength: 256 }
+    ClaimVerificationResult:
+      type: object
+      required: [sessionId, claimId, device, slotNumber, status, eligibleForCollection]
+      properties:
+        sessionId: { type: string }
+        claimId: { type: string }
+        customerName: { type: [string, "null"] }
+        device: { $ref: "#/components/schemas/Device" }
+        slotNumber: { type: number }
+        status: { type: string, enum: [ready] }
+        readyAt: { type: [string, "null"], format: date-time }
+        eligibleForCollection: { type: boolean }
     WorkspaceBooking:
       type: object
       required: [id, customerId, customerName, status, createdAt]
@@ -920,9 +1070,13 @@ components:
         customerName: { type: ["string", "null"] }
         referenceId: { type: string }
         claimId: { type: ["string", "null"] }
+        claimToken: { type: ["string", "null"], description: Authorized receipt detail only; omitted from lists }
         subtotal: { type: number }
         total: { type: number }
         paymentMethod: { type: string }
+        details:
+          type: [object, "null"]
+          additionalProperties: true
         generatedAt: { type: string, format: date-time }
     DashboardSummary:
       type: object

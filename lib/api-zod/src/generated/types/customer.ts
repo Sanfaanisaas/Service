@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CustomerAccountStatus } from './customerAccountStatus';
 import type { NotificationPreferences } from './notificationPreferences';
 
 export interface Customer {
@@ -14,6 +15,7 @@ export interface Customer {
   phone?: string | null;
   /** @nullable */
   email?: string | null;
+  accountStatus?: CustomerAccountStatus;
   whatsappOptIn: boolean;
   notificationPreferences: NotificationPreferences;
   createdAt: Date;

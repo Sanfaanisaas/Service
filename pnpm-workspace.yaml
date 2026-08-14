@@ -74,5 +74,6 @@ overrides:
   esbuild: "0.27.3"
 
 allowBuilds:
+  core-js: set this to true or false
   esbuild: false
   mongodb-memory-server: true

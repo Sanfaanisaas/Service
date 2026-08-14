@@ -2,9 +2,10 @@ import mongoose from 'mongoose';
 import type { z } from 'zod';
 import type { workspaceInput } from '../contracts.js';
 import { ApiError } from '../lib/errors.js';
-import { ResourceLock, WorkspaceBooking } from '../models/index.js';
-import { assertTransition, audit, customerByPhone, releasePosition, reservePosition, settings } from './common.js';
+import { Customer, Notification, ResourceLock, WorkspaceBooking } from '../models/index.js';
+import { ACTIVE_WORKSPACE, assertTransition, audit, customerByPhone, releasePosition, reservePosition, settings } from './common.js';
 import { generateReceipt, recordIncome } from './ledger.js';
+import { sendCustomerPush } from './push.js';
 
 type Input = z.infer<typeof workspaceInput>;
 export async function registerWorkspace(input: Input, actorId: string) {
@@ -46,10 +47,13 @@ export async function checkInWorkspace(id: string, actorId: string) {
 }
 export async function checkOutWorkspace(id: string, actorId: string) {
   const session = await mongoose.startSession();
+  let wasFull = false;
   try {
-    return await session.withTransaction(async () => {
+    const result = await session.withTransaction(async () => {
       const booking = await WorkspaceBooking.findById(id).session(session);
       if (!booking) throw new ApiError(404, 'WORKSPACE_NOT_FOUND', 'Workspace booking not found.');
+      const config = await settings(session);
+      wasFull = await WorkspaceBooking.countDocuments({ status: { $in: ACTIVE_WORKSPACE } }).session(session) >= config.workspaceCapacity;
       assertTransition(booking.status, 'checked-out');
       booking.status = 'checked-out'; booking.timeOut = new Date();
       await booking.save({ session });
@@ -57,5 +61,30 @@ export async function checkOutWorkspace(id: string, actorId: string) {
       await audit(actorId, 'WORKSPACE_CHECKED_OUT', 'workspace_booking', booking.id, undefined, session);
       return booking;
     });
+    if (wasFull) void notifyWorkspaceAvailable().catch((error) => console.error('Workspace availability notification failed', error));
+    return result;
   } finally { await session.endSession(); }
+}
+
+async function notifyWorkspaceAvailable(now = new Date()) {
+  const cutoff = new Date(now.getTime() - 6 * 60 * 60_000);
+  const eligible = await Customer.find({
+    'notificationPreferences.workspaceAvailability': true,
+    $or: [{ lastWorkspaceNotificationAt: null }, { lastWorkspaceNotificationAt: { $lte: cutoff } }],
+  });
+  await Promise.all(eligible.map(async (candidate) => {
+    const customer = await Customer.findOneAndUpdate({
+      _id: candidate._id,
+      $or: [{ lastWorkspaceNotificationAt: null }, { lastWorkspaceNotificationAt: { $lte: cutoff } }],
+    }, { lastWorkspaceNotificationAt: now }, { new: true });
+    if (!customer) return;
+    if (customer.notificationPreferences?.inApp) await Notification.create({
+      customerId: customer._id, title: 'Workspace available',
+      message: 'A SANFAANI workspace place is now available.', type: 'workspace_available',
+    });
+    if (customer.notificationPreferences?.push) await sendCustomerPush(customer._id, {
+      title: 'SANFAANI', body: 'A workspace place is now available.',
+      url: '/customer/workspace', tag: 'workspace-available',
+    });
+  }));
 }

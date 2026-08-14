@@ -339,6 +339,9 @@ export async function customFetch<T = unknown>(
   const { responseType = "auto", headers: headersInit, ...init } = options;
 
   const method = resolveMethod(input, init.method);
+  if (typeof navigator !== "undefined" && !navigator.onLine && !["GET", "HEAD", "OPTIONS"].includes(method)) {
+    throw new Error("You're offline. Operational changes are temporarily unavailable.");
+  }
 
   if (init.body != null && (method === "GET" || method === "HEAD")) {
     throw new TypeError(`customFetch: ${method} requests cannot have a body.`);

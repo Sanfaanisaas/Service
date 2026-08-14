@@ -10,12 +10,23 @@ export const workspaceStatuses = ['registered', 'checked-in', 'checked-out', 'ca
 export type WorkspaceStatus = (typeof workspaceStatuses)[number];
 
 const optionalText = z.string().trim().max(240).optional().or(z.literal(''));
+const phone = z.string().trim().regex(/^\+?[0-9][0-9\s-]{6,23}$/, 'Enter a valid phone number');
+const notificationPreferences = z.object({
+  push: z.boolean(), inApp: z.boolean(), chargingReminders: z.boolean().default(true), workspaceAvailability: z.boolean().default(false),
+});
 export const customerInput = z.object({
   name: z.string().trim().min(2).max(120),
-  phone: z.string().trim().min(7).max(24).optional().or(z.literal('')),
+  phone: phone.optional().or(z.literal('')),
   email: z.string().email().optional().or(z.literal('')),
   whatsappOptIn: z.boolean().default(false),
-  notificationPreferences: z.object({ push: z.boolean(), inApp: z.boolean() }).default({ push: false, inApp: true }),
+  notificationPreferences: notificationPreferences.default({ push: false, inApp: true, chargingReminders: true, workspaceAvailability: false }),
+});
+export const customerProfileInput = z.object({
+  name: z.string().trim().min(2).max(120), phone,
+  whatsappOptIn: z.boolean(),
+  notificationPreferences: z.object({
+    inApp: z.boolean(), chargingReminders: z.boolean(), workspaceAvailability: z.boolean(),
+  }),
 });
 export const productInput = z.object({
   sku: z.string().trim().min(2).max(40).transform((v) => v.toUpperCase()),
@@ -66,7 +77,7 @@ export const settingsInput = z.object({
 
 export interface Customer {
   id: string; name: string; phone?: string; email?: string; whatsappOptIn: boolean;
-  notificationPreferences: { push: boolean; inApp: boolean }; createdAt: string; updatedAt: string;
+  notificationPreferences: { push: boolean; inApp: boolean; chargingReminders: boolean; workspaceAvailability: boolean }; createdAt: string; updatedAt: string;
 }
 export interface Product {
   id: string; sku: string; name: string; description?: string; category: string; costPrice: number;
@@ -91,7 +102,7 @@ export interface Transaction {
 export interface Receipt {
   id: string; receiptNumber: string; type: 'sale'|'charging'|'workspace'; customerId?: string;
   customerName?: string; referenceId: string; claimId?: string; subtotal: number; total: number;
-  paymentMethod: PaymentMethod; details?: Record<string, unknown>; generatedAt: string;
+  paymentMethod: PaymentMethod; details?: Record<string, unknown>; claimToken?: string; generatedAt: string;
 }
 export interface DashboardSummary {
   today: { revenue: number; chargingRevenue: number; stockRevenue: number; workspaceRevenue: number; expenses: number; net: number };

@@ -206,9 +206,19 @@ export interface HealthStatus {
   status: string;
 }
 
+export type CustomerAccountStatus = typeof CustomerAccountStatus[keyof typeof CustomerAccountStatus];
+
+
+export const CustomerAccountStatus = {
+  active: 'active',
+  inactive: 'inactive',
+} as const;
+
 export interface NotificationPreferences {
   push: boolean;
   inApp: boolean;
+  chargingReminders: boolean;
+  workspaceAvailability: boolean;
 }
 
 export interface Customer {
@@ -218,6 +228,7 @@ export interface Customer {
   phone?: string | null;
   /** @nullable */
   email?: string | null;
+  accountStatus?: CustomerAccountStatus;
   whatsappOptIn: boolean;
   notificationPreferences: NotificationPreferences;
   createdAt: string;
@@ -230,6 +241,51 @@ export interface CustomerInput {
   email?: string;
   whatsappOptIn?: boolean;
   notificationPreferences?: NotificationPreferences;
+}
+
+export type CustomerProfileInputNotificationPreferences = {
+  inApp: boolean;
+  chargingReminders: boolean;
+  workspaceAvailability: boolean;
+};
+
+export interface CustomerProfileInput {
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  name: string;
+  /**
+     * @minLength 7
+     * @maxLength 24
+     * @pattern ^\\+?[0-9][0-9\\s-]{6,23}$
+     */
+  phone: string;
+  whatsappOptIn: boolean;
+  notificationPreferences: CustomerProfileInputNotificationPreferences;
+}
+
+export interface PushPublicKey {
+  /** @nullable */
+  publicKey: string | null;
+}
+
+export type PushSubscriptionInputKeys = {
+  p256dh: string;
+  auth: string;
+};
+
+export interface PushSubscriptionInput {
+  endpoint: string;
+  keys: PushSubscriptionInputKeys;
+}
+
+export interface PushSubscriptionState {
+  enabled: boolean;
+}
+
+export interface PushUnsubscribeInput {
+  endpoint: string;
 }
 
 export interface Product {
@@ -314,6 +370,11 @@ export const ReceiptType = {
   workspace: 'workspace',
 } as const;
 
+/**
+ * @nullable
+ */
+export type ReceiptDetails = { [key: string]: unknown } | null;
+
 export interface Receipt {
   id: string;
   receiptNumber: string;
@@ -323,9 +384,16 @@ export interface Receipt {
   referenceId?: string;
   /** @nullable */
   claimId?: string | null;
+  /**
+     * Authorized receipt detail only; omitted from lists
+     * @nullable
+     */
+  claimToken?: string | null;
   subtotal: number;
   total: number;
   paymentMethod: string;
+  /** @nullable */
+  details?: ReceiptDetails;
   generatedAt: string;
 }
 
@@ -351,6 +419,34 @@ export interface ChargingStatusInput {
 export interface ChargingCollectInput {
   /** @minLength 8 */
   claimId: string;
+}
+
+export interface ClaimVerificationInput {
+  /**
+     * @minLength 32
+     * @maxLength 256
+     */
+  token: string;
+}
+
+export type ClaimVerificationResultStatus = typeof ClaimVerificationResultStatus[keyof typeof ClaimVerificationResultStatus];
+
+
+export const ClaimVerificationResultStatus = {
+  ready: 'ready',
+} as const;
+
+export interface ClaimVerificationResult {
+  sessionId: string;
+  claimId: string;
+  /** @nullable */
+  customerName?: string | null;
+  device: Device;
+  slotNumber: number;
+  status: ClaimVerificationResultStatus;
+  /** @nullable */
+  readyAt?: string | null;
+  eligibleForCollection: boolean;
 }
 
 export type WorkspaceBookingStatus = typeof WorkspaceBookingStatus[keyof typeof WorkspaceBookingStatus];
