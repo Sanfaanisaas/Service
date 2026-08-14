@@ -3,7 +3,7 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-type Identity = { id: string; email: string; user_metadata: { name: string } };
+type Identity = { id: string; email: string; user_metadata: { name: string; role?: string; app_role?: string } };
 const identities: Record<string, Identity> = {
   admin: { id: 'supabase-admin', email: 'admin@sanfaani.test', user_metadata: { name: 'Admin' } },
   staff: { id: 'supabase-staff', email: 'staff@sanfaani.test', user_metadata: { name: 'Staff' } },
@@ -104,6 +104,22 @@ describe('SANFAANI auth and RBAC', () => {
     await api().get('/api/me').set(auth('admin')).expect(200);
     await models.AppUser.updateOne({ supabaseUserId: identities.admin.id }, { active: false });
     await api().get('/api/me').set(auth('admin')).expect(403);
+  });
+
+  it('ignores public role injection through metadata, headers, query, and request body', async () => {
+    identities.customerA.user_metadata.role = 'admin';
+    identities.customerA.user_metadata.app_role = 'staff';
+    const response = await api().get('/api/me?role=admin')
+      .set(auth('customerA'))
+      .set('x-sanfaani-role', 'admin')
+      .send({ role: 'admin' })
+      .expect(200);
+    expect(response.body.data.role).toBe('customer');
+    const persisted = await models.AppUser.findOne({ supabaseUserId: identities.customerA.id });
+    expect(persisted?.get('role')).toBe('customer');
+    await api().patch('/api/settings').set(auth('customerA')).send({ role: 'admin' }).expect(403);
+    delete identities.customerA.user_metadata.role;
+    delete identities.customerA.user_metadata.app_role;
   });
 
   it('enforces operational and administrator privileges', async () => {

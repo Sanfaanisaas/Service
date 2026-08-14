@@ -8,6 +8,8 @@
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./backend/**\" --filter \"./frontend/**\" --filter \"./scripts\" --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
+    "test:e2e": "pnpm --filter @workspace/sanfaani-operations run test:e2e",
+    "security:secrets": "node scripts/security/secret-scan.mjs",
     "dev": "pnpm -r --parallel run dev",
     "dev:backend": "pnpm --filter \"@workspace/backend\" run dev",
     "dev:frontend": "pnpm --filter \"@workspace/frontend\" run dev",

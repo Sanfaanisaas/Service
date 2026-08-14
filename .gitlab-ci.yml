@@ -1,0 +1,77 @@
+image: node:22-bookworm
+
+stages:
+  - install
+  - validate
+  - test
+  - build
+  - e2e
+
+variables:
+  PNPM_STORE_DIR: "$CI_PROJECT_DIR/.pnpm-store"
+  PLAYWRIGHT_HTML_OPEN: "never"
+
+default:
+  cache:
+    key:
+      files:
+        - pnpm-lock.yaml
+    paths:
+      - .pnpm-store/
+  before_script:
+    - corepack enable
+    - pnpm config set store-dir "$PNPM_STORE_DIR"
+
+install:
+  stage: install
+  script:
+    - pnpm install --frozen-lockfile
+    - pnpm security:secrets
+
+typecheck:
+  stage: validate
+  needs: [install]
+  script:
+    - pnpm install --frozen-lockfile
+    - pnpm typecheck
+
+unit-integration:
+  stage: test
+  needs: [typecheck]
+  script:
+    - pnpm install --frozen-lockfile
+    - pnpm test
+
+production-build:
+  stage: build
+  needs: [unit-integration]
+  script:
+    - pnpm install --frozen-lockfile
+    - pnpm build
+  artifacts:
+    expire_in: 7 days
+    paths:
+      - frontend/sanfaani-operations/dist/
+      - backend/api-server/dist/
+
+staging-e2e:
+  image: mcr.microsoft.com/playwright:v1.62.1-noble
+  stage: e2e
+  needs: [production-build]
+  resource_group: sanfaani-staging-e2e
+  environment:
+    name: staging
+    url: $E2E_BASE_URL
+  script:
+    - pnpm install --frozen-lockfile
+    - pnpm test:e2e
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - frontend/sanfaani-operations/playwright-report/
+      - frontend/sanfaani-operations/test-results/
+  rules:
+    - if: "$CI_COMMIT_TAG"
+    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
+    - if: "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH"

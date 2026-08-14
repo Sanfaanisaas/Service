@@ -7,15 +7,18 @@
     "dev": "pnpm dev:client",
     "build": "pnpm build:client",
     "serve": "export $(cat .env | xargs) && vite preview --config vite.config.ts --host 0.0.0.0",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.e2e.json --noEmit",
     "dev:client": "vite --config vite.config.ts --host 0.0.0.0",
     "build:client": "vite build --config vite.config.ts",
     "start": "vite preview --config vite.config.ts --host 0.0.0.0",
-    "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "lint": "pnpm typecheck",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:list": "E2E_ALLOW_MISSING=1 playwright test --list"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",
+    "@playwright/test": "^1.62.1",
     "@radix-ui/react-accordion": "^1.2.20",
     "@radix-ui/react-alert-dialog": "^1.1.23",
     "@radix-ui/react-aspect-ratio": "^1.1.15",

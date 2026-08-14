@@ -44,8 +44,15 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 .env
+.env.e2e
+.env.e2e.local
 /backend/.env
 /backend/api-server/.env
+/frontend/sanfaani-operations/.env.e2e
+/frontend/sanfaani-operations/.env.e2e.local
+/frontend/sanfaani-operations/playwright-report/
+/frontend/sanfaani-operations/test-results/
+/frontend/sanfaani-operations/.auth/
 # Replit
 .cache/
 .local/
