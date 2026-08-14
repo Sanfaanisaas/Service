@@ -72,7 +72,7 @@ test.describe("RC-01 settings, profile, and customer isolation", () => {
     } finally {
       await api(page, "PATCH", "/api/customer/me", {
         name: original.name,
-        phone: original.phone ?? "",
+        phone: process.env.E2E_CUSTOMER_A_PHONE!,
         whatsappOptIn: original.whatsappOptIn,
         notificationPreferences: {
           inApp: original.notificationPreferences.inApp,
@@ -224,13 +224,13 @@ test.describe("RC-01 settings, profile, and customer isolation", () => {
         a,
         "PATCH",
         "/api/customer/me",
-        profilePayload(originalA, originalA.phone ?? "08000000001"),
+        profilePayload(originalA, process.env.E2E_CUSTOMER_A_PHONE!),
       );
       await api(
         b,
         "PATCH",
         "/api/customer/me",
-        profilePayload(originalB, originalB.phone ?? "08000000002"),
+        profilePayload(originalB, process.env.E2E_CUSTOMER_B_PHONE!),
       );
       await aContext.close();
       await bContext.close();

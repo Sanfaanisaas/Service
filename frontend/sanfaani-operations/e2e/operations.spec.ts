@@ -52,6 +52,11 @@ test.describe("RC-01 transactional browser workflows", () => {
     expect((await download).suggestedFilename()).toBe(
       `SANFAANI-Receipt-${receiptNumber}.pdf`,
     );
+    await page.emulateMedia({ media: "print" });
+    await expect(page.locator(".receipt-actions")).toBeHidden();
+    await expect(page.locator("aside")).toBeHidden();
+    await expect(page.locator("article.receipt-print")).toBeVisible();
+    await page.emulateMedia({ media: "screen" });
 
     await page.goto("/admin/charging");
     const row = page

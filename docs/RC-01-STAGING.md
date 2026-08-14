@@ -45,9 +45,13 @@ E2E_STAFF_EMAIL=
 E2E_STAFF_PASSWORD=
 E2E_CUSTOMER_A_EMAIL=
 E2E_CUSTOMER_A_PASSWORD=
+E2E_CUSTOMER_A_PHONE=
 E2E_CUSTOMER_B_EMAIL=
 E2E_CUSTOMER_B_PASSWORD=
+E2E_CUSTOMER_B_PHONE=
 ```
+
+For local execution, copy `frontend/sanfaani-operations/e2e.env.example` to `.env.e2e` in the same directory and fill it with staging-only values.
 
 Use synthetic identities. The MongoDB URI must name a staging-only database, and the Supabase URL must identify a staging-only project. Restrict the E2E variables to protected release branches and the `staging` environment.
 
