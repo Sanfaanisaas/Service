@@ -5,7 +5,18 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { LimitParameter } from './limitParameter';
+import type { PageParameter } from './pageParameter';
 
 export type ListCustomersParams = {
 search?: string;
+/**
+ * @minimum 1
+ */
+page?: PageParameter;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: LimitParameter;
 };

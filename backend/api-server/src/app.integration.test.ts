@@ -88,6 +88,16 @@ afterEach(async () => { await Promise.all(Object.values(models).map((model) => m
 afterAll(async () => { await disconnectDatabase(); await replicaSet.stop(); });
 
 describe('SANFAANI auth and RBAC', () => {
+  it('exposes a minimal health response and allows only the configured browser origin', async () => {
+    const health = await api().get('/api/health').expect(200);
+    expect(health.body).toEqual({ success: true, data: { status: 'ok' } });
+    const allowed = await api().get('/api/me').set(auth('admin')).set('Origin', 'http://localhost:3000').expect(200);
+    expect(allowed.headers['access-control-allow-origin']).toBe('http://localhost:3000');
+    const denied = await api().get('/api/me').set(auth('admin')).set('Origin', 'https://untrusted.example').expect(200);
+    expect(denied.headers['access-control-allow-origin']).toBe('http://localhost:3000');
+    expect(denied.headers['access-control-allow-origin']).not.toBe('https://untrusted.example');
+  });
+
   it('returns 401 for missing and invalid tokens, accepts a valid Supabase user, and rejects an inactive AppUser', async () => {
     await api().get('/api/me').expect(401);
     await api().get('/api/me').set({ Authorization: 'Bearer invalid' }).expect(401);
@@ -247,5 +257,25 @@ describe('atomic operations and financial records', () => {
     await api().patch(`/api/staff/${staff.id}/role`).set(auth('admin')).send({ role: 'customer' }).expect(200);
     const audit = await models.AuditLog.findOne({ action: 'USER_ROLE_UPDATED' });
     expect(audit?.get('metadata')).toMatchObject({ actor: identities.admin.id, targetUser: staff.id, previousRole: 'staff', newRole: 'customer' });
+  });
+});
+
+describe('admin analytics and exports', () => {
+  it('aggregates revenue from the central ledger and keeps reports admin-only', async () => {
+    await provision('admin', 'admin');
+    await provision('staff', 'staff');
+    await models.Transaction.create([
+      { type: 'stock_sale', amount: 300, direction: 'income', paymentMethod: 'cash', description: 'Stock income', createdBy: 'test' },
+      { type: 'charging_fee', amount: 150, direction: 'income', paymentMethod: 'cash', description: 'Charging income', createdBy: 'test' },
+      { type: 'expense', amount: 80, direction: 'expense', paymentMethod: 'cash', description: 'Expense', createdBy: 'test' },
+    ]);
+    await api().get('/api/analytics?period=today').set(auth('staff')).expect(403);
+    await api().get('/api/analytics?period=today').set(auth('customerA')).expect(403);
+    const report = await api().get('/api/analytics?period=today').set(auth('admin')).expect(200);
+    expect(report.body.data.revenue).toMatchObject({ income: 450, expenses: 80, net: 370, stockSales: 300, charging: 150, workspace: 0 });
+    expect(report.body.data.revenueTrend[0]).toMatchObject({ income: 450, expenses: 80, net: 370 });
+    const csv = await api().get('/api/reports/export?dataset=transactions&period=today').set(auth('admin')).expect(200);
+    expect(csv.headers['content-type']).toContain('text/csv');
+    expect(csv.text).toContain('Stock income');
   });
 });

@@ -52,12 +52,12 @@ export async function updateStatus(id: string, next: 'charging'|'ready'|'cancell
   if (next === 'ready') current.readyAt = new Date();
   await current.save();
   if (next === 'ready') {
-    await Notification.create({
+    const customer = await Customer.findById(current.customerId);
+    if (customer?.notificationPreferences?.inApp) await Notification.create({
       customerId: current.customerId, title: 'Your device is ready',
       message: `Your device should now be ready for collection. Claim ID: ${current.publicSessionId}`,
       type: 'charging_ready',
     });
-    const customer = await Customer.findById(current.customerId);
     if (customer?.notificationPreferences?.push && customer.notificationPreferences?.chargingReminders !== false) {
       await sendCustomerPush(current.customerId, {
         title: 'SANFAANI', body: 'Your device is ready for collection.',

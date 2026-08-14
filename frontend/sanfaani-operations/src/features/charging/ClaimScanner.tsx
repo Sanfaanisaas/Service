@@ -5,6 +5,8 @@ type DetectorConstructor = new (options: { formats: string[] }) => Detector;
 
 export default function ClaimScanner({ onScan }: { onScan: (token: string) => void }) {
   const video = useRef<HTMLVideoElement>(null);
+  const onScanRef = useRef(onScan);
+  onScanRef.current = onScan;
   const [message, setMessage] = useState('Starting camera…');
   useEffect(() => {
     let stream: MediaStream | undefined;
@@ -27,7 +29,7 @@ export default function ClaimScanner({ onScan }: { onScan: (token: string) => vo
           const [result] = await detector.detect(video.current);
           if (result?.rawValue) {
             const token = result.rawValue.replace(/^sanfaani:\/\/claim\//, '');
-            onScan(token);
+            onScanRef.current(token);
             return;
           }
         } catch { /* A frame may not be ready yet. */ }
@@ -36,6 +38,6 @@ export default function ClaimScanner({ onScan }: { onScan: (token: string) => vo
       void video.current.play().then(scan);
     }).catch(() => setMessage('Camera permission was not granted. Enter the Claim ID manually.'));
     return () => { stopped = true; cancelAnimationFrame(frame); stream?.getTracks().forEach((track) => track.stop()); };
-  }, [onScan]);
+  }, []);
   return <div><video ref={video} playsInline muted className="aspect-square w-full rounded-md bg-black object-cover" /><p className="mt-3 text-sm text-muted-foreground">{message}</p></div>;
 }

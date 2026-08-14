@@ -1,6 +1,6 @@
 import webpush from 'web-push';
 import { env } from '../config/env.js';
-import { PushSubscription } from '../models/index.js';
+import { Customer, PushSubscription } from '../models/index.js';
 
 if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
@@ -25,5 +25,8 @@ export async function sendCustomerPush(customerId: unknown, payload: { title: st
       console.error('Push delivery failed', { status: status ?? 'unknown' });
     }
   }));
+  if (subscriptions.length > 0 && await PushSubscription.countDocuments({ customerId }) === 0) {
+    await Customer.updateOne({ _id: customerId }, { 'notificationPreferences.push': false });
+  }
   return { sent, removed };
 }

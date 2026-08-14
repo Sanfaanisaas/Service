@@ -82,10 +82,119 @@ export const GetDashboardSummaryResponse = zod.object({
 
 
 /**
+ * @summary Get an admin-only server-aggregated business report
+ */
+export const getAnalyticsReportQueryPeriodDefault = `30-days`;
+
+export const GetAnalyticsReportQueryParams = zod.object({
+  "period": zod.enum(['today', 'yesterday', '7-days', '30-days', 'this-month', 'custom']).default(getAnalyticsReportQueryPeriodDefault),
+  "from": zod.date().optional(),
+  "to": zod.date().optional()
+})
+
+export const GetAnalyticsReportResponse = zod.object({
+  "range": zod.object({
+  "from": zod.coerce.date(),
+  "to": zod.coerce.date(),
+  "timezone": zod.string()
+}),
+  "revenue": zod.object({
+  "income": zod.number(),
+  "expenses": zod.number(),
+  "net": zod.number(),
+  "stockSales": zod.number(),
+  "charging": zod.number(),
+  "workspace": zod.number()
+}),
+  "revenueTrend": zod.array(zod.object({
+  "date": zod.string(),
+  "income": zod.number(),
+  "expenses": zod.number(),
+  "net": zod.number()
+})),
+  "moduleRevenue": zod.object({
+  "inventory": zod.number(),
+  "charging": zod.number(),
+  "workspace": zod.number(),
+  "other": zod.number()
+}),
+  "charging": zod.object({
+  "sessionsPerDay": zod.array(zod.object({
+  "date": zod.string(),
+  "sessions": zod.number()
+})),
+  "peakCheckInHour": zod.number().nullish(),
+  "averageDurationMinutes": zod.number(),
+  "readyToCollectionMinutes": zod.number()
+}),
+  "workspace": zod.object({
+  "visitsPerDay": zod.array(zod.object({
+  "date": zod.string(),
+  "visits": zod.number()
+})),
+  "peakUsageHour": zod.number().nullish(),
+  "revenue": zod.number()
+}),
+  "inventory": zod.object({
+  "topProducts": zod.array(zod.object({
+  "productId": zod.string(),
+  "name": zod.string(),
+  "quantity": zod.number(),
+  "revenue": zod.number()
+})),
+  "lowStock": zod.array(zod.object({
+  "id": zod.string(),
+  "sku": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "category": zod.string(),
+  "costPrice": zod.number(),
+  "sellingPrice": zod.number(),
+  "quantityOnHand": zod.number(),
+  "reorderThreshold": zod.number(),
+  "active": zod.boolean(),
+  "updatedAt": zod.coerce.date()
+})),
+  "stockOutFrequency": zod.number(),
+  "estimatedValue": zod.number()
+}),
+  "customers": zod.object({
+  "unique": zod.number(),
+  "charging": zod.number(),
+  "workspace": zod.number()
+})
+})
+
+
+/**
+ * @summary Export a filtered admin-only operational dataset as CSV
+ */
+export const exportReportQueryPeriodDefault = `30-days`;
+
+export const ExportReportQueryParams = zod.object({
+  "dataset": zod.enum(['transactions', 'sales', 'charging', 'workspace']),
+  "period": zod.enum(['today', 'yesterday', '7-days', '30-days', 'this-month', 'custom']).default(exportReportQueryPeriodDefault),
+  "from": zod.date().optional(),
+  "to": zod.date().optional()
+})
+
+export const ExportReportResponse = zod.unknown()
+
+
+/**
  * @summary List customers
  */
+export const listCustomersQueryPageDefault = 1;
+
+export const listCustomersQueryLimitDefault = 50;
+export const listCustomersQueryLimitMax = 100;
+
+
+
 export const ListCustomersQueryParams = zod.object({
-  "search": zod.coerce.string().optional()
+  "search": zod.coerce.string().optional(),
+  "page": zod.coerce.number().int().min(1).default(listCustomersQueryPageDefault),
+  "limit": zod.coerce.number().int().min(1).max(listCustomersQueryLimitMax).default(listCustomersQueryLimitDefault)
 })
 
 export const listCustomersResponseNotificationPreferencesChargingRemindersDefault = true;
@@ -610,8 +719,17 @@ export const CreateSaleResponse = zod.object({
 /**
  * @summary List ledger transactions
  */
+export const listTransactionsQueryPageDefault = 1;
+
+export const listTransactionsQueryLimitDefault = 50;
+export const listTransactionsQueryLimitMax = 100;
+
+
+
 export const ListTransactionsQueryParams = zod.object({
-  "period": zod.enum(['today', 'yesterday', 'week', 'month']).optional()
+  "period": zod.enum(['today', 'yesterday', 'week', 'month']).optional(),
+  "page": zod.coerce.number().int().min(1).default(listTransactionsQueryPageDefault),
+  "limit": zod.coerce.number().int().min(1).max(listTransactionsQueryLimitMax).default(listTransactionsQueryLimitDefault)
 })
 
 export const ListTransactionsResponseItem = zod.object({
@@ -629,6 +747,18 @@ export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem)
 /**
  * @summary List recent receipts
  */
+export const listReceiptsQueryPageDefault = 1;
+
+export const listReceiptsQueryLimitDefault = 50;
+export const listReceiptsQueryLimitMax = 100;
+
+
+
+export const ListReceiptsQueryParams = zod.object({
+  "page": zod.coerce.number().int().min(1).default(listReceiptsQueryPageDefault),
+  "limit": zod.coerce.number().int().min(1).max(listReceiptsQueryLimitMax).default(listReceiptsQueryLimitDefault)
+})
+
 export const ListReceiptsResponseItem = zod.object({
   "id": zod.string(),
   "receiptNumber": zod.string(),
@@ -954,6 +1084,18 @@ export const GetCustomerMyWorkspaceResponse = zod.array(GetCustomerMyWorkspaceRe
 /**
  * @summary Get only the authenticated customer's receipts
  */
+export const getCustomerMyReceiptsQueryPageDefault = 1;
+
+export const getCustomerMyReceiptsQueryLimitDefault = 50;
+export const getCustomerMyReceiptsQueryLimitMax = 100;
+
+
+
+export const GetCustomerMyReceiptsQueryParams = zod.object({
+  "page": zod.coerce.number().int().min(1).default(getCustomerMyReceiptsQueryPageDefault),
+  "limit": zod.coerce.number().int().min(1).max(getCustomerMyReceiptsQueryLimitMax).default(getCustomerMyReceiptsQueryLimitDefault)
+})
+
 export const GetCustomerMyReceiptsResponseItem = zod.object({
   "id": zod.string(),
   "receiptNumber": zod.string(),

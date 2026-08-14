@@ -1,13 +1,42 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler } from '../lib/errors.js';
+import { ApiError, asyncHandler } from '../lib/errors.js';
 import { allow } from '../middleware/auth.js';
 import { businessDayBounds } from '../lib/dates.js';
-import { ChargingSession, Customer, Product, Receipt, Sale, Transaction, WorkspaceBooking } from '../models/index.js';
+import { ChargingSession, Customer, InventoryMovement, Product, Receipt, Sale, Transaction, WorkspaceBooking } from '../models/index.js';
 import { ACTIVE_CHARGING, ACTIVE_WORKSPACE, settings } from '../services/common.js';
 
 export const reporting = Router();
 const staff = allow('admin', 'staff');
+const admin = allow('admin');
+const reportQuery = z.object({
+  period: z.enum(['today', 'yesterday', '7-days', '30-days', 'this-month', 'custom']).default('30-days'),
+  from: z.string().date().optional(), to: z.string().date().optional(),
+});
+
+async function reportingRange(query: unknown) {
+  const input = reportQuery.parse(query);
+  const config = await settings();
+  const now = new Date();
+  if (input.period === 'custom') {
+    if (!input.from || !input.to) throw new ApiError(400, 'DATE_RANGE_REQUIRED', 'Custom reports require from and to dates.');
+    const start = businessDayBounds(config.businessTimezone, new Date(`${input.from}T12:00:00Z`)).start;
+    const end = businessDayBounds(config.businessTimezone, new Date(`${input.to}T12:00:00Z`)).end;
+    if (end <= start) throw new ApiError(400, 'INVALID_DATE_RANGE', 'The report end date must not be before the start date.');
+    if (end.getTime() - start.getTime() > 366 * 86_400_000) throw new ApiError(400, 'DATE_RANGE_TOO_LARGE', 'Reports are limited to 366 days.');
+    return { start, end, timezone: config.businessTimezone, input };
+  }
+  if (input.period === 'today') { const bounds = businessDayBounds(config.businessTimezone, now); return { ...bounds, timezone: config.businessTimezone, input }; }
+  if (input.period === 'yesterday') { const bounds = businessDayBounds(config.businessTimezone, new Date(now.getTime() - 86_400_000)); return { ...bounds, timezone: config.businessTimezone, input }; }
+  if (input.period === 'this-month') {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: config.businessTimezone, year: 'numeric', month: '2-digit' }).formatToParts(now).map((part) => [part.type, part.value]));
+    return { start: businessDayBounds(config.businessTimezone, new Date(`${parts.year}-${parts.month}-01T12:00:00Z`)).start, end: businessDayBounds(config.businessTimezone, now).end, timezone: config.businessTimezone, input };
+  }
+  const days = input.period === '7-days' ? 7 : 30;
+  return { start: businessDayBounds(config.businessTimezone, new Date(now.getTime() - (days - 1) * 86_400_000)).start, end: businessDayBounds(config.businessTimezone, now).end, timezone: config.businessTimezone, input };
+}
+
+const transactionModule = (type: string) => type === 'stock_sale' ? 'inventory' : type === 'charging_fee' ? 'charging' : type === 'workspace_fee' ? 'workspace' : 'other';
 reporting.get('/dashboard/summary', staff, asyncHandler(async (_req, res) => {
   const config = await settings();
   const { start, end } = businessDayBounds(config.businessTimezone);
@@ -75,4 +104,56 @@ reporting.get('/search', staff, asyncHandler(async (req, res) => {
     ...charging.map((item) => ({ type: 'Charging Session', id: item.id, title: item.publicSessionId, subtitle: item.customerName })),
     ...receipts.map((item) => ({ type: 'Receipt', id: item.id, title: item.receiptNumber, subtitle: item.type })),
   ] });
+}));
+
+reporting.get('/analytics', admin, asyncHandler(async (req, res) => {
+  const { start, end, timezone } = await reportingRange(req.query);
+  const match = { createdAt: { $gte: start, $lt: end } };
+  const [ledger, trend, chargingDaily, chargingPeak, chargingDurations, workspaceDaily, workspacePeak, topProducts, lowStock, inventoryValue, stockOuts, customerActivity] = await Promise.all([
+    Transaction.aggregate([{ $match: match }, { $group: { _id: { direction: '$direction', type: '$type' }, total: { $sum: '$amount' } } }]),
+    Transaction.aggregate([{ $match: match }, { $group: { _id: { day: { $dateToString: { date: '$createdAt', format: '%Y-%m-%d', timezone } }, direction: '$direction' }, total: { $sum: '$amount' } } }, { $sort: { '_id.day': 1 } }]),
+    ChargingSession.aggregate([{ $match: match }, { $group: { _id: { $dateToString: { date: '$createdAt', format: '%Y-%m-%d', timezone } }, sessions: { $sum: 1 } } }, { $sort: { _id: 1 } }]),
+    ChargingSession.aggregate([{ $match: match }, { $group: { _id: { $hour: { date: '$timeIn', timezone } }, sessions: { $sum: 1 } } }, { $sort: { sessions: -1 } }, { $limit: 1 }]),
+    ChargingSession.aggregate([{ $match: { ...match, collectedAt: { $ne: null } } }, { $group: { _id: null, averageDurationMs: { $avg: { $subtract: ['$collectedAt', '$timeIn'] } }, averageCollectionDelayMs: { $avg: { $cond: [{ $and: ['$readyAt', '$collectedAt'] }, { $subtract: ['$collectedAt', '$readyAt'] }, null] } } } }]),
+    WorkspaceBooking.aggregate([{ $match: match }, { $group: { _id: { $dateToString: { date: '$createdAt', format: '%Y-%m-%d', timezone } }, visits: { $sum: 1 } } }, { $sort: { _id: 1 } }]),
+    WorkspaceBooking.aggregate([{ $match: match }, { $group: { _id: { $hour: { date: '$createdAt', timezone } }, visits: { $sum: 1 } } }, { $sort: { visits: -1 } }, { $limit: 1 }]),
+    Sale.aggregate([{ $match: match }, { $unwind: '$items' }, { $group: { _id: '$items.productId', name: { $first: '$items.name' }, quantity: { $sum: '$items.quantity' }, revenue: { $sum: '$items.subtotal' } } }, { $sort: { quantity: -1 } }, { $limit: 10 }]),
+    Product.find({ active: true, $expr: { $lte: ['$quantityOnHand', '$reorderThreshold'] } }).sort({ quantityOnHand: 1 }).limit(20),
+    Product.aggregate([{ $match: { active: true } }, { $group: { _id: null, value: { $sum: { $multiply: ['$costPrice', '$quantityOnHand'] } } } }]),
+    InventoryMovement.countDocuments({ createdAt: match.createdAt, newQuantity: 0 }),
+    Promise.all([ChargingSession.distinct('customerId', match), WorkspaceBooking.distinct('customerId', match), Sale.distinct('customerId', { ...match, customerId: { $ne: null } })]),
+  ]);
+  const income = ledger.filter((item) => item._id.direction === 'income').reduce((sum, item) => sum + item.total, 0);
+  const expenses = ledger.filter((item) => item._id.direction === 'expense').reduce((sum, item) => sum + item.total, 0);
+  const moduleRevenue = { inventory: 0, charging: 0, workspace: 0, other: 0 };
+  ledger.filter((item) => item._id.direction === 'income').forEach((item) => { moduleRevenue[transactionModule(item._id.type) as keyof typeof moduleRevenue] += item.total; });
+  const trendByDay = new Map<string, { date: string; income: number; expenses: number; net: number }>();
+  trend.forEach((item) => { const row = trendByDay.get(item._id.day) ?? { date: item._id.day, income: 0, expenses: 0, net: 0 }; row[item._id.direction === 'income' ? 'income' : 'expenses'] += item.total; row.net = row.income - row.expenses; trendByDay.set(item._id.day, row); });
+  const uniqueCustomers = new Set(customerActivity.flat().filter(Boolean).map(String));
+  res.json({ success: true, data: {
+    range: { from: start, to: end, timezone },
+    revenue: { income, expenses, net: income - expenses, stockSales: moduleRevenue.inventory, charging: moduleRevenue.charging, workspace: moduleRevenue.workspace },
+    revenueTrend: [...trendByDay.values()], moduleRevenue,
+    charging: { sessionsPerDay: chargingDaily.map((item) => ({ date: item._id, sessions: item.sessions })), peakCheckInHour: chargingPeak[0]?._id ?? null, averageDurationMinutes: Math.round((chargingDurations[0]?.averageDurationMs ?? 0) / 60_000), readyToCollectionMinutes: Math.round((chargingDurations[0]?.averageCollectionDelayMs ?? 0) / 60_000) },
+    workspace: { visitsPerDay: workspaceDaily.map((item) => ({ date: item._id, visits: item.visits })), peakUsageHour: workspacePeak[0]?._id ?? null, revenue: moduleRevenue.workspace },
+    inventory: { topProducts: topProducts.map((item) => ({ productId: item._id, name: item.name, quantity: item.quantity, revenue: item.revenue })), lowStock, stockOutFrequency: stockOuts, estimatedValue: inventoryValue[0]?.value ?? 0 },
+    customers: { unique: uniqueCustomers.size, charging: customerActivity[0].length, workspace: customerActivity[1].length },
+  } });
+}));
+
+const csvCell = (value: unknown) => {
+  const safe = String(value ?? '').replace(/^([=+\-@])/, "'$1").replaceAll('"', '""');
+  return `"${safe}"`;
+};
+reporting.get('/reports/export', admin, asyncHandler(async (req, res) => {
+  const dataset = z.enum(['transactions', 'sales', 'charging', 'workspace']).parse(req.query.dataset);
+  const { start, end } = await reportingRange(req.query);
+  const match = { createdAt: { $gte: start, $lt: end } };
+  let headings: string[] = []; let rows: unknown[][] = [];
+  if (dataset === 'transactions') { const values = await Transaction.find(match).sort({ createdAt: -1 }); headings = ['Date', 'Description', 'Type', 'Direction', 'Payment Method', 'Amount']; rows = values.map((item) => [item.get('createdAt'), item.description, item.type, item.direction, item.paymentMethod, item.amount]); }
+  if (dataset === 'sales') { const values = await Sale.find(match).sort({ createdAt: -1 }); headings = ['Date', 'Sale ID', 'Items', 'Payment Method', 'Total']; rows = values.map((item) => [item.get('createdAt'), item.id, item.items.map((line) => `${line.name} x${line.quantity}`).join('; '), item.paymentMethod, item.total]); }
+  if (dataset === 'charging') { const values = await ChargingSession.find(match).sort({ createdAt: -1 }); headings = ['Date', 'Claim ID', 'Customer', 'Device', 'Slot', 'Status', 'Amount']; rows = values.map((item) => [item.timeIn, item.publicSessionId, item.customerName, `${item.device?.brand ?? ''} ${item.device?.model ?? item.device?.type ?? 'unknown'}`.trim(), item.slotNumber, item.status, item.amount]); }
+  if (dataset === 'workspace') { const values = await WorkspaceBooking.find(match).sort({ createdAt: -1 }); headings = ['Date', 'Customer', 'Seat', 'Status', 'Time In', 'Time Out', 'Amount']; rows = values.map((item) => [item.get('createdAt'), item.customerName, item.seatNumber, item.status, item.timeIn, item.timeOut, item.amount]); }
+  const csv = [headings, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
+  res.type('text/csv').attachment(`sanfaani-${dataset}-${start.toISOString().slice(0, 10)}.csv`).send(csv);
 }));

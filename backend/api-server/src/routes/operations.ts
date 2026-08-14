@@ -25,6 +25,10 @@ const customerId = (req: Request) => {
   return id;
 };
 const routeParam = (value: string | string[] | undefined) => z.string().min(1).parse(value);
+const pageInput = (query: Request['query'], defaultLimit = 50) => ({
+  page: z.coerce.number().int().min(1).default(1).parse(query.page),
+  limit: z.coerce.number().int().min(1).max(100).default(defaultLimit).parse(query.limit),
+});
 const receiptLookup = (value: string) => isValidObjectId(value)
   ? { $or: [{ _id: value }, { receiptNumber: value }] }
   : { receiptNumber: value };
@@ -98,7 +102,8 @@ operations.get('/customer/me/workspace', allow('customer'), asyncHandler(async (
   res.json({ success: true, data: await WorkspaceBooking.find({ customerId: customerId(req) }).sort({ createdAt: -1 }).limit(50) });
 }));
 operations.get('/customer/me/receipts', allow('customer'), asyncHandler(async (req, res) => {
-  res.json({ success: true, data: await Receipt.find({ customerId: customerId(req) }).sort({ generatedAt: -1 }).limit(200) });
+  const { page, limit } = pageInput(req.query);
+  res.json({ success: true, data: await Receipt.find({ customerId: customerId(req) }).sort({ generatedAt: -1 }).skip((page - 1) * limit).limit(limit) });
 }));
 operations.get('/customer/me/receipts/:id', allow('customer'), asyncHandler(async (req, res) => {
   const receipt = await Receipt.findOne({
@@ -124,7 +129,8 @@ operations.get('/customers', staff, asyncHandler(async (req, res) => {
   const filter = search ? { $or: [
     { name: { $regex: search, $options: 'i' } }, { phone: { $regex: search, $options: 'i' } }, { email: { $regex: search, $options: 'i' } },
   ] } : {};
-  res.json({ success: true, data: await Customer.find(filter).sort({ createdAt: -1 }).limit(100) });
+  const { page, limit } = pageInput(req.query);
+  res.json({ success: true, data: await Customer.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit) });
 }));
 operations.post('/customers', staff, asyncHandler(async (req, res) => {
   const input = customerInput.parse(req.body);
@@ -221,6 +227,7 @@ operations.get('/sales/:id', staff, asyncHandler(async (req, res) => {
 }));
 
 operations.get('/transactions', staff, asyncHandler(async (req, res) => {
+  const { page, limit } = pageInput(req.query);
   const period = z.enum(['today', 'yesterday', 'week', 'month']).optional().parse(req.query.period);
   const from = req.query.from ? new Date(String(req.query.from)) : undefined;
   const to = req.query.to ? new Date(String(req.query.to)) : undefined;
@@ -232,10 +239,11 @@ operations.get('/transactions', staff, asyncHandler(async (req, res) => {
     if (period === 'week') { const day = new Intl.DateTimeFormat('en-US', { timeZone: config.businessTimezone, weekday: 'short' }).format(now); const offset = ({ Sun: 6, Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5 } as Record<string, number>)[day] ?? 0; const bounds = businessDayBounds(config.businessTimezone, new Date(now.getTime() - offset * 86_400_000)); range = { $gte: bounds.start, $lt: businessDayBounds(config.businessTimezone, now).end }; }
     if (period === 'month') { const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: config.businessTimezone, year: 'numeric', month: '2-digit' }).formatToParts(now).map((part) => [part.type, part.value])); const bounds = businessDayBounds(config.businessTimezone, new Date(`${parts.year}-${parts.month}-01T12:00:00Z`)); range = { $gte: bounds.start, $lt: businessDayBounds(config.businessTimezone, now).end }; }
   }
-  res.json({ success: true, data: await Transaction.find(range ? { createdAt: range } : {}).sort({ createdAt: -1 }).limit(500) });
+  res.json({ success: true, data: await Transaction.find(range ? { createdAt: range } : {}).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit) });
 }));
-operations.get('/receipts', staff, asyncHandler(async (_req, res) => {
-  res.json({ success: true, data: await Receipt.find().sort({ generatedAt: -1 }).limit(200) });
+operations.get('/receipts', staff, asyncHandler(async (req, res) => {
+  const { page, limit } = pageInput(req.query);
+  res.json({ success: true, data: await Receipt.find().sort({ generatedAt: -1 }).skip((page - 1) * limit).limit(limit) });
 }));
 operations.get('/receipts/:id', staff, asyncHandler(async (req, res) => {
   const receipt = await Receipt.findOne(receiptLookup(routeParam(req.params.id)));

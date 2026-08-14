@@ -47,6 +47,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
+  /analytics:
+    get:
+      operationId: getAnalyticsReport
+      tags: [dashboard]
+      summary: Get an admin-only server-aggregated business report
+      parameters:
+        - $ref: "#/components/parameters/ReportPeriod"
+        - $ref: "#/components/parameters/ReportFrom"
+        - $ref: "#/components/parameters/ReportTo"
+      responses:
+        "200":
+          description: Analytics report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnalyticsReport" }
+  /reports/export:
+    get:
+      operationId: exportReport
+      tags: [history]
+      summary: Export a filtered admin-only operational dataset as CSV
+      parameters:
+        - name: dataset
+          in: query
+          required: true
+          schema: { type: string, enum: [transactions, sales, charging, workspace] }
+        - $ref: "#/components/parameters/ReportPeriod"
+        - $ref: "#/components/parameters/ReportFrom"
+        - $ref: "#/components/parameters/ReportTo"
+      responses:
+        "200":
+          description: CSV report
+          content:
+            text/csv:
+              schema: { type: string }
   /customers:
     get:
       operationId: listCustomers
@@ -57,6 +91,8 @@ paths:
           in: query
           schema:
             type: string
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
           description: Customer list
@@ -323,6 +359,8 @@ paths:
           schema:
             type: string
             enum: [today, yesterday, week, month]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
           description: Transaction list
@@ -337,6 +375,9 @@ paths:
       operationId: listReceipts
       tags: [receipts]
       summary: List recent receipts
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
           description: Receipt list
@@ -445,6 +486,9 @@ paths:
       operationId: getCustomerMyReceipts
       tags: [customer]
       summary: Get only the authenticated customer's receipts
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
           description: Customer receipts
@@ -692,6 +736,26 @@ components:
       required: true
       schema:
         type: string
+    ReportPeriod:
+      name: period
+      in: query
+      schema: { type: string, enum: [today, yesterday, 7-days, 30-days, this-month, custom], default: 30-days }
+    ReportFrom:
+      name: from
+      in: query
+      schema: { type: string, format: date }
+    ReportTo:
+      name: to
+      in: query
+      schema: { type: string, format: date }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
   schemas:
     AppUser:
       type: object
@@ -1108,6 +1172,92 @@ components:
         lowStockProducts:
           type: array
           items: { $ref: "#/components/schemas/Product" }
+    AnalyticsReport:
+      type: object
+      required: [range, revenue, revenueTrend, moduleRevenue, charging, workspace, inventory, customers]
+      properties:
+        range:
+          type: object
+          required: [from, to, timezone]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+            timezone: { type: string }
+        revenue:
+          type: object
+          required: [income, expenses, net, stockSales, charging, workspace]
+          properties:
+            income: { type: number }
+            expenses: { type: number }
+            net: { type: number }
+            stockSales: { type: number }
+            charging: { type: number }
+            workspace: { type: number }
+        revenueTrend:
+          type: array
+          items:
+            type: object
+            required: [date, income, expenses, net]
+            properties:
+              date: { type: string }
+              income: { type: number }
+              expenses: { type: number }
+              net: { type: number }
+        moduleRevenue:
+          type: object
+          required: [inventory, charging, workspace, other]
+          properties:
+            inventory: { type: number }
+            charging: { type: number }
+            workspace: { type: number }
+            other: { type: number }
+        charging:
+          type: object
+          required: [sessionsPerDay, averageDurationMinutes, readyToCollectionMinutes]
+          properties:
+            sessionsPerDay:
+              type: array
+              items:
+                type: object
+                required: [date, sessions]
+                properties: { date: { type: string }, sessions: { type: number } }
+            peakCheckInHour: { type: [number, "null"] }
+            averageDurationMinutes: { type: number }
+            readyToCollectionMinutes: { type: number }
+        workspace:
+          type: object
+          required: [visitsPerDay, revenue]
+          properties:
+            visitsPerDay:
+              type: array
+              items:
+                type: object
+                required: [date, visits]
+                properties: { date: { type: string }, visits: { type: number } }
+            peakUsageHour: { type: [number, "null"] }
+            revenue: { type: number }
+        inventory:
+          type: object
+          required: [topProducts, lowStock, stockOutFrequency, estimatedValue]
+          properties:
+            topProducts:
+              type: array
+              items:
+                type: object
+                required: [productId, name, quantity, revenue]
+                properties: { productId: { type: string }, name: { type: string }, quantity: { type: number }, revenue: { type: number } }
+            lowStock:
+              type: array
+              items: { $ref: "#/components/schemas/Product" }
+            stockOutFrequency: { type: number }
+            estimatedValue: { type: number }
+        customers:
+          type: object
+          required: [unique, charging, workspace]
+          properties:
+            unique: { type: number }
+            charging: { type: number }
+            workspace: { type: number }
     HistoryResponse:
       type: object
       required: [date, summary, transactions, charging, workspace, sales, records, pagination]

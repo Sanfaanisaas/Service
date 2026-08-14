@@ -61,7 +61,7 @@ export async function checkOutWorkspace(id: string, actorId: string) {
       await audit(actorId, 'WORKSPACE_CHECKED_OUT', 'workspace_booking', booking.id, undefined, session);
       return booking;
     });
-    if (wasFull) void notifyWorkspaceAvailable().catch((error) => console.error('Workspace availability notification failed', error));
+    if (wasFull) await notifyWorkspaceAvailable();
     return result;
   } finally { await session.endSession(); }
 }

@@ -591,6 +591,91 @@ export interface DashboardSummary {
   lowStockProducts: Product[];
 }
 
+export type AnalyticsReportRange = {
+  from: string;
+  to: string;
+  timezone: string;
+};
+
+export type AnalyticsReportRevenue = {
+  income: number;
+  expenses: number;
+  net: number;
+  stockSales: number;
+  charging: number;
+  workspace: number;
+};
+
+export type AnalyticsReportRevenueTrendItem = {
+  date: string;
+  income: number;
+  expenses: number;
+  net: number;
+};
+
+export type AnalyticsReportModuleRevenue = {
+  inventory: number;
+  charging: number;
+  workspace: number;
+  other: number;
+};
+
+export type AnalyticsReportChargingSessionsPerDayItem = {
+  date: string;
+  sessions: number;
+};
+
+export type AnalyticsReportCharging = {
+  sessionsPerDay: AnalyticsReportChargingSessionsPerDayItem[];
+  /** @nullable */
+  peakCheckInHour?: number | null;
+  averageDurationMinutes: number;
+  readyToCollectionMinutes: number;
+};
+
+export type AnalyticsReportWorkspaceVisitsPerDayItem = {
+  date: string;
+  visits: number;
+};
+
+export type AnalyticsReportWorkspace = {
+  visitsPerDay: AnalyticsReportWorkspaceVisitsPerDayItem[];
+  /** @nullable */
+  peakUsageHour?: number | null;
+  revenue: number;
+};
+
+export type AnalyticsReportInventoryTopProductsItem = {
+  productId: string;
+  name: string;
+  quantity: number;
+  revenue: number;
+};
+
+export type AnalyticsReportInventory = {
+  topProducts: AnalyticsReportInventoryTopProductsItem[];
+  lowStock: Product[];
+  stockOutFrequency: number;
+  estimatedValue: number;
+};
+
+export type AnalyticsReportCustomers = {
+  unique: number;
+  charging: number;
+  workspace: number;
+};
+
+export interface AnalyticsReport {
+  range: AnalyticsReportRange;
+  revenue: AnalyticsReportRevenue;
+  revenueTrend: AnalyticsReportRevenueTrendItem[];
+  moduleRevenue: AnalyticsReportModuleRevenue;
+  charging: AnalyticsReportCharging;
+  workspace: AnalyticsReportWorkspace;
+  inventory: AnalyticsReportInventory;
+  customers: AnalyticsReportCustomers;
+}
+
 export type HistoryResponseSummary = {
   chargingCount: number;
   workspaceCount: number;
@@ -632,8 +717,60 @@ export interface HistoryResponse {
   pagination: Pagination;
 }
 
+export type ReportPeriodParameter = typeof ReportPeriodParameter[keyof typeof ReportPeriodParameter];
+
+
+export const ReportPeriodParameter = {
+  today: 'today',
+  yesterday: 'yesterday',
+  '7-days': '7-days',
+  '30-days': '30-days',
+  'this-month': 'this-month',
+  custom: 'custom',
+} as const;
+
+export type ReportFromParameter = string;
+
+export type ReportToParameter = string;
+
+export type PageParameter = number;
+
+export type LimitParameter = number;
+
+export type GetAnalyticsReportParams = {
+period?: ReportPeriodParameter;
+from?: ReportFromParameter;
+to?: ReportToParameter;
+};
+
+export type ExportReportParams = {
+dataset: ExportReportDataset;
+period?: ReportPeriodParameter;
+from?: ReportFromParameter;
+to?: ReportToParameter;
+};
+
+export type ExportReportDataset = typeof ExportReportDataset[keyof typeof ExportReportDataset];
+
+
+export const ExportReportDataset = {
+  transactions: 'transactions',
+  sales: 'sales',
+  charging: 'charging',
+  workspace: 'workspace',
+} as const;
+
 export type ListCustomersParams = {
 search?: string;
+/**
+ * @minimum 1
+ */
+page?: PageParameter;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: LimitParameter;
 };
 
 export type ListProductsParams = {
@@ -643,6 +780,15 @@ category?: string;
 
 export type ListTransactionsParams = {
 period?: ListTransactionsPeriod;
+/**
+ * @minimum 1
+ */
+page?: PageParameter;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: LimitParameter;
 };
 
 export type ListTransactionsPeriod = typeof ListTransactionsPeriod[keyof typeof ListTransactionsPeriod];
@@ -654,6 +800,18 @@ export const ListTransactionsPeriod = {
   week: 'week',
   month: 'month',
 } as const;
+
+export type ListReceiptsParams = {
+/**
+ * @minimum 1
+ */
+page?: PageParameter;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: LimitParameter;
+};
 
 export type ListHistoryParams = {
 date?: string;
@@ -692,4 +850,16 @@ export const GetCustomerMyChargingView = {
   history: 'history',
   latest: 'latest',
 } as const;
+
+export type GetCustomerMyReceiptsParams = {
+/**
+ * @minimum 1
+ */
+page?: PageParameter;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: LimitParameter;
+};
 

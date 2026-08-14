@@ -6,11 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { LimitParameter } from './limitParameter';
-import type { ListTransactionsPeriod } from './listTransactionsPeriod';
 import type { PageParameter } from './pageParameter';
 
-export type ListTransactionsParams = {
-period?: ListTransactionsPeriod;
+export type GetCustomerMyReceiptsParams = {
 /**
  * @minimum 1
  */

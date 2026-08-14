@@ -21,6 +21,7 @@ import type {
 
 import type {
   ActiveUpdateInput,
+  AnalyticsReport,
   AppUser,
   ChargingCheckInInput,
   ChargingCheckInResult,
@@ -34,12 +35,16 @@ import type {
   CustomerInput,
   CustomerProfileInput,
   DashboardSummary,
+  ExportReportParams,
+  GetAnalyticsReportParams,
   GetCustomerMyChargingParams,
+  GetCustomerMyReceiptsParams,
   HealthStatus,
   HistoryResponse,
   ListCustomersParams,
   ListHistoryParams,
   ListProductsParams,
+  ListReceiptsParams,
   ListTransactionsParams,
   Notification,
   Product,
@@ -233,6 +238,174 @@ export function useGetDashboardSummary<TData = Awaited<ReturnType<typeof getDash
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardSummaryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAnalyticsReportUrl = (params?: GetAnalyticsReportParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/analytics?${stringifiedParams}` : `/api/analytics`
+}
+
+/**
+ * @summary Get an admin-only server-aggregated business report
+ */
+export const getAnalyticsReport = async (params?: GetAnalyticsReportParams, options?: Parameters<typeof customFetch>[1]): Promise<AnalyticsReport> => {
+
+  return customFetch<AnalyticsReport>(getGetAnalyticsReportUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAnalyticsReportQueryKey = (params?: GetAnalyticsReportParams,) => {
+    return [
+    `/api/analytics`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAnalyticsReportQueryOptions = <TData = Awaited<ReturnType<typeof getAnalyticsReport>>, TError = ErrorType<unknown>>(params?: GetAnalyticsReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAnalyticsReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAnalyticsReportQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAnalyticsReport>>> = ({ signal }) => getAnalyticsReport(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAnalyticsReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAnalyticsReportQueryResult = NonNullable<Awaited<ReturnType<typeof getAnalyticsReport>>>
+export type GetAnalyticsReportQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get an admin-only server-aggregated business report
+ */
+
+export function useGetAnalyticsReport<TData = Awaited<ReturnType<typeof getAnalyticsReport>>, TError = ErrorType<unknown>>(
+ params?: GetAnalyticsReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAnalyticsReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAnalyticsReportQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getExportReportUrl = (params: ExportReportParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/reports/export?${stringifiedParams}` : `/api/reports/export`
+}
+
+/**
+ * @summary Export a filtered admin-only operational dataset as CSV
+ */
+export const exportReport = async (params: ExportReportParams, options?: Parameters<typeof customFetch>[1]): Promise<string> => {
+
+  return customFetch<string>(getExportReportUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportReportQueryKey = (params?: ExportReportParams,) => {
+    return [
+    `/api/reports/export`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExportReportQueryOptions = <TData = Awaited<ReturnType<typeof exportReport>>, TError = ErrorType<unknown>>(params: ExportReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportReportQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportReport>>> = ({ signal }) => exportReport(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportReportQueryResult = NonNullable<Awaited<ReturnType<typeof exportReport>>>
+export type ExportReportQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Export a filtered admin-only operational dataset as CSV
+ */
+
+export function useExportReport<TData = Awaited<ReturnType<typeof exportReport>>, TError = ErrorType<unknown>>(
+ params: ExportReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportReportQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -1440,20 +1613,27 @@ export function useListTransactions<TData = Awaited<ReturnType<typeof listTransa
 
 
 
-export const getListReceiptsUrl = () => {
+export const getListReceiptsUrl = (params?: ListReceiptsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/receipts`
+  return stringifiedParams.length > 0 ? `/api/receipts?${stringifiedParams}` : `/api/receipts`
 }
 
 /**
  * @summary List recent receipts
  */
-export const listReceipts = async ( options?: Parameters<typeof customFetch>[1]): Promise<Receipt[]> => {
+export const listReceipts = async (params?: ListReceiptsParams, options?: Parameters<typeof customFetch>[1]): Promise<Receipt[]> => {
 
-  return customFetch<Receipt[]>(getListReceiptsUrl(),
+  return customFetch<Receipt[]>(getListReceiptsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -1466,23 +1646,23 @@ export const listReceipts = async ( options?: Parameters<typeof customFetch>[1])
 
 
 
-export const getListReceiptsQueryKey = () => {
+export const getListReceiptsQueryKey = (params?: ListReceiptsParams,) => {
     return [
-    `/api/receipts`
+    `/api/receipts`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListReceiptsQueryOptions = <TData = Awaited<ReturnType<typeof listReceipts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReceipts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListReceiptsQueryOptions = <TData = Awaited<ReturnType<typeof listReceipts>>, TError = ErrorType<unknown>>(params?: ListReceiptsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReceipts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListReceiptsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListReceiptsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listReceipts>>> = ({ signal }) => listReceipts({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listReceipts>>> = ({ signal }) => listReceipts(params, { signal, ...requestOptions });
 
 
 
@@ -1500,11 +1680,11 @@ export type ListReceiptsQueryError = ErrorType<unknown>
  */
 
 export function useListReceipts<TData = Awaited<ReturnType<typeof listReceipts>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReceipts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: ListReceiptsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReceipts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListReceiptsQueryOptions(options)
+  const queryOptions = getListReceiptsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -1987,20 +2167,27 @@ export function useGetCustomerMyWorkspace<TData = Awaited<ReturnType<typeof getC
 
 
 
-export const getGetCustomerMyReceiptsUrl = () => {
+export const getGetCustomerMyReceiptsUrl = (params?: GetCustomerMyReceiptsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/customer/me/receipts`
+  return stringifiedParams.length > 0 ? `/api/customer/me/receipts?${stringifiedParams}` : `/api/customer/me/receipts`
 }
 
 /**
  * @summary Get only the authenticated customer's receipts
  */
-export const getCustomerMyReceipts = async ( options?: Parameters<typeof customFetch>[1]): Promise<Receipt[]> => {
+export const getCustomerMyReceipts = async (params?: GetCustomerMyReceiptsParams, options?: Parameters<typeof customFetch>[1]): Promise<Receipt[]> => {
 
-  return customFetch<Receipt[]>(getGetCustomerMyReceiptsUrl(),
+  return customFetch<Receipt[]>(getGetCustomerMyReceiptsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -2013,23 +2200,23 @@ export const getCustomerMyReceipts = async ( options?: Parameters<typeof customF
 
 
 
-export const getGetCustomerMyReceiptsQueryKey = () => {
+export const getGetCustomerMyReceiptsQueryKey = (params?: GetCustomerMyReceiptsParams,) => {
     return [
-    `/api/customer/me/receipts`
+    `/api/customer/me/receipts`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetCustomerMyReceiptsQueryOptions = <TData = Awaited<ReturnType<typeof getCustomerMyReceipts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerMyReceipts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetCustomerMyReceiptsQueryOptions = <TData = Awaited<ReturnType<typeof getCustomerMyReceipts>>, TError = ErrorType<unknown>>(params?: GetCustomerMyReceiptsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerMyReceipts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetCustomerMyReceiptsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetCustomerMyReceiptsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCustomerMyReceipts>>> = ({ signal }) => getCustomerMyReceipts({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCustomerMyReceipts>>> = ({ signal }) => getCustomerMyReceipts(params, { signal, ...requestOptions });
 
 
 
@@ -2047,11 +2234,11 @@ export type GetCustomerMyReceiptsQueryError = ErrorType<unknown>
  */
 
 export function useGetCustomerMyReceipts<TData = Awaited<ReturnType<typeof getCustomerMyReceipts>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerMyReceipts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetCustomerMyReceiptsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerMyReceipts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetCustomerMyReceiptsQueryOptions(options)
+  const queryOptions = getGetCustomerMyReceiptsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

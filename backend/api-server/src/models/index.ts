@@ -54,6 +54,7 @@ const chargingSchema = new Schema({
   },
   slotNumber: { type: Number, required: true }, timeIn: { type: Date, required: true, default: Date.now },
   estimatedReadyAt: Date, readyAt: Date, collectedAt: Date,
+  reminderSentAt: Date,
   status: { type: String, enum: ['checked-in', 'charging', 'ready', 'collected', 'cancelled'], default: 'checked-in', index: true },
   amount: money, paymentStatus: { type: String, enum: ['pending', 'paid'], default: 'pending' },
   paymentMethod: { type: String, enum: ['cash', 'transfer', 'card', 'other'], default: 'cash' },
