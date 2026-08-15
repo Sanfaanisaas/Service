@@ -47,7 +47,7 @@ export async function checkIn(input: Input, actorId: string) {
 export async function updateStatus(id: string, next: 'charging'|'ready'|'cancelled', actorId: string) {
   const current = await ChargingSession.findById(id);
   if (!current) throw new ApiError(404, 'CHARGING_NOT_FOUND', 'Charging session not found.');
-  assertTransition(current.status, next);
+  assertTransition(current.status, next, 'charging');
   current.status = next;
   if (next === 'ready') current.readyAt = new Date();
   await current.save();
@@ -80,7 +80,7 @@ export async function collect(id: string, presentedClaimId: string, actorId: str
         $or: [{ publicSessionId: presentedClaimId }, { secureClaimToken: presentedClaimId }],
       }).session(session);
       if (!current) throw new ApiError(404, 'CLAIM_NOT_VERIFIED', 'The claim ID could not be verified.');
-      assertTransition(current.status, 'collected');
+      assertTransition(current.status, 'collected', 'charging');
       current.status = 'collected'; current.collectedAt = new Date();
       await current.save({ session });
       await releasePosition('charging', current.id, session);

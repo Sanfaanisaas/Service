@@ -594,6 +594,51 @@ describe("atomic operations and financial records", () => {
     );
   });
 
+  it("checks a workspace visitor out, releases the seat, and retains history", async () => {
+    await provision("staff", "staff");
+    await updateSettings({ workspaceCapacity: 1 });
+    const registration = await api()
+      .post("/api/workspace/register")
+      .set(auth("staff"))
+      .send({
+        customerName: "Workspace lifecycle",
+        phone: "08000000041",
+        amount: 200,
+        paymentMethod: "cash",
+        deviceInfo: { type: "laptop", brand: "RC", model: "Workspace" },
+      })
+      .expect(201);
+    const bookingId = registration.body.data.booking.id;
+    expect(registration.body.data.booking.deviceInfo).toEqual({
+      type: "laptop",
+      brand: "RC",
+      model: "Workspace",
+    });
+
+    await api()
+      .post(`/api/workspace/${bookingId}/check-in`)
+      .set(auth("staff"))
+      .expect(200);
+    await api()
+      .post(`/api/workspace/${bookingId}/check-out`)
+      .set(auth("staff"))
+      .expect(200);
+
+    const booking = await models.WorkspaceBooking.findById(bookingId);
+    expect(booking).toMatchObject({ status: "checked-out" });
+    expect(booking?.timeOut).toBeInstanceOf(Date);
+    expect(await models.WorkspaceBooking.countDocuments({ _id: bookingId })).toBe(1);
+    expect(await models.Receipt.countDocuments({ referenceId: bookingId })).toBe(1);
+    expect(await models.Transaction.countDocuments({ referenceId: bookingId })).toBe(1);
+    expect(await models.ResourceLock.findOne({ resource: "workspace", position: 1 })).toMatchObject({
+      occupied: false,
+      referenceId: null,
+    });
+    expect(await models.AuditLog.countDocuments({ action: "WORKSPACE_CHECKED_OUT", entityId: bookingId })).toBe(1);
+    const active = await api().get("/api/workspace").set(auth("staff")).expect(200);
+    expect(active.body.data).toHaveLength(0);
+  });
+
   it("audits role changes with the actor, previous role, and new role", async () => {
     await provision("admin", "admin");
     const staff = await provision("staff", "staff");

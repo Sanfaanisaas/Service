@@ -169,9 +169,12 @@ test.describe("RC-01 settings, profile, and customer isolation", () => {
         amount: 0,
         paymentMethod: "cash",
       });
+      expect(workspaceA.status()).toBe(201);
       const wsA = (await workspaceA.json()).data;
+      workspaceIds.push(wsA.booking.id);
+      expect(workspaceB.status()).toBe(201);
       const wsB = (await workspaceB.json()).data;
-      workspaceIds.push(wsA.booking.id, wsB.booking.id);
+      workspaceIds.push(wsB.booking.id);
 
       const aCharging = (
         await (

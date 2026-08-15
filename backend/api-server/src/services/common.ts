@@ -57,10 +57,16 @@ export async function releasePosition(resource: 'charging'|'workspace', referenc
 export async function audit(actorId: string, action: string, entityType: string, entityId?: string, metadata?: Record<string, unknown>, session?: ClientSession) {
   await AuditLog.create([{ actorId, action, entityType, entityId, metadata }], { session });
 }
-export function assertTransition(current: string, next: string) {
-  const allowed: Record<string, string[]> = {
-    'checked-in': ['charging', 'cancelled'], charging: ['ready', 'cancelled'],
-    ready: ['collected', 'cancelled'], registered: ['checked-in', 'cancelled'], 'checked-out': [],
+export function assertTransition(current: string, next: string, flow: 'charging' | 'workspace') {
+  const allowed: Record<'charging' | 'workspace', Record<string, string[]>> = {
+    charging: {
+      'checked-in': ['charging', 'cancelled'], charging: ['ready', 'cancelled'],
+      ready: ['collected', 'cancelled'], collected: [], cancelled: [],
+    },
+    workspace: {
+      registered: ['checked-in', 'cancelled'], 'checked-in': ['checked-out', 'cancelled'],
+      'checked-out': [], cancelled: [],
+    },
   };
-  if (!allowed[current]?.includes(next)) throw new ApiError(409, 'INVALID_STATUS_TRANSITION', `Cannot move from ${current} to ${next}.`);
+  if (!allowed[flow][current]?.includes(next)) throw new ApiError(409, 'INVALID_STATUS_TRANSITION', `Cannot move from ${current} to ${next}.`);
 }

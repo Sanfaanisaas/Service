@@ -64,7 +64,8 @@ chargingSchema.index({ customerName: 'text', publicSessionId: 'text' });
 
 const workspaceSchema = new Schema({
   customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
-  customerName: String, phone: String, deviceInfo: { type: String, brand: String, model: String },
+  customerName: String, phone: String,
+  deviceInfo: { type: { type: String }, brand: String, model: String },
   seatNumber: Number, timeIn: Date, timeOut: Date, amount: { type: Number, min: 0, default: 0 },
   paymentMethod: { type: String, enum: ['cash', 'transfer', 'card', 'other'], default: 'cash' },
   status: { type: String, enum: ['registered', 'checked-in', 'checked-out', 'cancelled'], default: 'registered', index: true },

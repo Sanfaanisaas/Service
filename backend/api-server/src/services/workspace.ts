@@ -39,7 +39,7 @@ export async function registerWorkspace(input: Input, actorId: string) {
 export async function checkInWorkspace(id: string, actorId: string) {
   const booking = await WorkspaceBooking.findById(id);
   if (!booking) throw new ApiError(404, 'WORKSPACE_NOT_FOUND', 'Workspace booking not found.');
-  assertTransition(booking.status, 'checked-in');
+  assertTransition(booking.status, 'checked-in', 'workspace');
   booking.status = 'checked-in'; booking.timeIn = new Date();
   await booking.save();
   await audit(actorId, 'WORKSPACE_CHECKED_IN', 'workspace_booking', booking.id);
@@ -54,7 +54,7 @@ export async function checkOutWorkspace(id: string, actorId: string) {
       if (!booking) throw new ApiError(404, 'WORKSPACE_NOT_FOUND', 'Workspace booking not found.');
       const config = await settings(session);
       wasFull = await WorkspaceBooking.countDocuments({ status: { $in: ACTIVE_WORKSPACE } }).session(session) >= config.workspaceCapacity;
-      assertTransition(booking.status, 'checked-out');
+      assertTransition(booking.status, 'checked-out', 'workspace');
       booking.status = 'checked-out'; booking.timeOut = new Date();
       await booking.save({ session });
       await releasePosition('workspace', booking.id, session);
