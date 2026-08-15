@@ -10,7 +10,6 @@ Frontend build variables:
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 VITE_API_URL=
-VITE_VAPID_PUBLIC_KEY=
 ```
 
 Backend runtime variables (the names below are the names parsed by the application):
@@ -43,12 +42,8 @@ E2E_ADMIN_EMAIL=
 E2E_ADMIN_PASSWORD=
 E2E_STAFF_EMAIL=
 E2E_STAFF_PASSWORD=
-E2E_CUSTOMER_A_EMAIL=
-E2E_CUSTOMER_A_PASSWORD=
-E2E_CUSTOMER_A_PHONE=
-E2E_CUSTOMER_B_EMAIL=
-E2E_CUSTOMER_B_PASSWORD=
-E2E_CUSTOMER_B_PHONE=
+E2E_CUSTOMER_EMAIL=
+E2E_CUSTOMER_PASSWORD=
 ```
 
 For local execution, create `frontend/sanfaani-operations/.env.e2e` from the variable block above. The file is gitignored; fill it with staging-only values.
@@ -61,8 +56,8 @@ Use synthetic identities. The MongoDB URI must name a staging-only database, and
 2. Deploy the frontend with the staging public variables. Confirm HTTPS, manifest, service worker, and CSP response headers.
 3. Confirm the frontend origin receives `Access-Control-Allow-Origin`; send the same request from an unrelated origin and confirm it does not receive that origin in the header.
 4. Confirm MongoDB ping, replica-set sessions, a committed transaction, and an intentionally rolled-back transaction against staging data.
-5. Provision Admin, Staff, Customer A, and Customer B in the staging Supabase project. Let `/api/me` create their application records, then use an admin to assign only the Staff role.
-6. Run `pnpm test:e2e`. Tests prefix records with `RC01-`, restore mutable settings/profile values, release capacity locks, and deactivate created products where practical.
+5. Provision Admin, Staff, and one Customer-role denial identity in the staging Supabase project. Let `/api/me` create their application records, then use an admin to assign only the Staff role. The Customer identity must remain a customer and must not enter the operations console.
+6. Run `pnpm test:e2e`. Tests prefix records with `RC01-`, restore mutable settings, release capacity locks, and deactivate created products where practical. Customer ownership remains covered by backend integration tests because the production frontend intentionally has no customer portal.
 
 ## Physical checks not replaceable by headless E2E
 

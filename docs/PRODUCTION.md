@@ -1,46 +1,69 @@
 # SANFAANI production runbook
 
-## Deployment shape
+## Deployment shape and product boundary
 
-Deploy `frontend/sanfaani-operations` as the Vite static application and `backend/api-server` as a persistent Node service. Set `VITE_API_URL` to the backend origin without a trailing `/api`; the generated client adds `/api` itself. The frontend host must rewrite non-file routes to `index.html` for authenticated deep links.
+GitHub is the production source for the internal Admin/Staff console. Deploy `frontend/sanfaani-operations` as a Vite static application and `backend/api-server` as a persistent Node service. Public signup and customer-facing frontend routes are intentionally unavailable. Customer records and dormant authenticated customer APIs remain supported by the backend.
 
-Production must use HTTPS. Service workers, browser push, and camera scanning require a secure context outside localhost. The backend should be reachable only over HTTPS from the browser.
+Set `VITE_API_URL` to the backend origin without a trailing `/api`; the generated client adds `/api`. The frontend host must rewrite non-file routes to `index.html`. Production must use HTTPS for service workers, push, and camera scanning.
 
 ## Required environment
 
-Frontend:
+Frontend public values only:
 
-- `VITE_SUPABASE_URL`: Supabase project URL.
-- `VITE_SUPABASE_ANON_KEY`: public/anonymous browser key, never a service-role key.
-- `VITE_API_URL`: deployed API origin, for example `https://api.example.com`.
-- `BASE_PATH`: optional Vite base path; `/` is the normal deployment.
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_API_URL`
+- `BASE_PATH` (optional; normally `/`)
 
-The VAPID public key is fetched from authenticated `GET /api/push/public-key`; it is not duplicated in the Vite bundle.
-
-Backend:
+Backend secrets/runtime values (the names parsed by the repository):
 
 - `NODE_ENV=production`
 - `SERVER_PORT`
 - `MONGODB_URI`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `CLIENT_URL`: the one explicitly allowed production frontend origin; never use `origin: true`.
-- `SANFAANI_ADMIN_EMAIL`: bootstrap administrator email.
+- `CLIENT_URL`: the exact allowed HTTPS frontend origin
+- `SANFAANI_ADMIN_EMAIL`: initial administrator bootstrap identity
 - `VAPID_PUBLIC_KEY`
-- `VAPID_PRIVATE_KEY`: server only.
-- `VAPID_SUBJECT`: a `mailto:` or HTTPS contact URI.
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT`
 
-Store backend values in the deployment provider's secret manager. The ignored local `.env` files are development inputs and must never be copied into a frontend artifact or committed.
+The backend fetches/serves the VAPID public key to authenticated clients. Store server values in the provider secret manager. Never copy MongoDB, service-role, VAPID private, or credential values into `VITE_*`, workflow YAML, source, or frontend artifacts.
 
-## Release checks
+## Provisioning and roles
 
-1. Run `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
-2. Verify `GET /api/health` returns only `{ success: true, data: { status: "ok" } }`.
-3. Confirm the deployed frontend origin exactly equals `CLIENT_URL` and an unrelated Origin is rejected by CORS.
-4. Exercise admin, staff, and customer logins in Chromium; refresh each authenticated route.
-5. Complete charging, inventory sale, workspace, customer ownership, and RBAC smoke workflows.
-6. Install the PWA in desktop and mobile Chromium; verify the offline banner and that a mutation cannot be submitted offline.
-7. With real VAPID keys, enable notifications by user action, mark a device READY, verify the privacy-safe push, and open `/customer/device` from the notification.
-8. Test the critical workflows at 375, 430, 768, and at least 1024 CSS pixels.
+Bootstrap the first admin with `SANFAANI_ADMIN_EMAIL`. Additional operational users are created by an Admin through Staff Management. `POST /api/staff/invite` uses the Supabase Admin API server-side, creates an active Staff AppUser, and audits the invitation. Subsequent promotion is an authenticated admin-only role mutation. There is no public Staff, Admin, or Customer signup.
 
-Safari/iOS support must not be claimed until separately tested. Browser push cannot be considered deployment-verified without valid VAPID configuration and a real browser subscription.
+## Deploy
+
+```bash
+corepack enable
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+Deploy the backend first, then set `VITE_API_URL` and deploy `frontend/` with its `vercel.json`. Confirm `GET /api/health` returns only `{ "success": true, "data": { "status": "ok" } }`.
+
+## Security acceptance
+
+1. Confirm the frontend origin exactly equals backend `CLIENT_URL`; an unrelated `Origin` must not receive an allow-origin response.
+2. Confirm Vercel returns CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy`, frame denial, and the reviewed permissions policy. CSP must not contain `unsafe-eval`.
+3. Run `pnpm security:secrets` and inspect the final Git diff without printing secret values.
+4. Verify Admin and Staff RBAC against frontend routes and direct APIs; verify customer-role, inactive, and unauthenticated identities are denied the operations console.
+5. Verify MongoDB commit and forced rollback on a deployment that supports transactions. Charging, sales, and workspace must not leave partial domain, lock, ledger, movement, receipt, or audit records.
+
+## Operational acceptance
+
+Complete charging/claim/collection, inventory/restock/sale/oversell, workspace/check-in/checkout/capacity, receipt print/PDF/QR, analytics/CSV, settings propagation, password recovery, and responsive checks at 375, 430, 768, 1024, and desktop widths. Mutations must fail clearly offline.
+
+Physical camera scanning, recovery-email delivery, real push delivery, standalone installation, and Vercel deployment require external/physical evidence and must be reported as not verified when unavailable.
+
+## Push and PWA
+
+PWA support remains useful for operational staff. Notification enrollment UI for customers is intentionally absent; backend push capability remains preserved/dormant. Notification bodies must stay privacy-safe. Push clicks are constrained to operational frontend paths, and mutations are never queued as apparent offline successes.
+
+## Rollback
+
+Rollback the production deployment to the prior known-good GitHub commit. To restore the full customer-portal product for development, branch from GitLab tag `full-product-pre-production-2026-08-15` (commit `5a9a758cee467556721c9a2a4a75665c7f453bdc`) as described in `docs/PRODUCT-VARIANTS.md`; never move the archive tag or force-push either repository.

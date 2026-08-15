@@ -61,6 +61,7 @@ import type {
   SaleResult,
   Settings,
   SettingsInput,
+  StaffInviteInput,
   StockAdjustmentInput,
   Transaction,
   WorkspaceBooking,
@@ -3067,6 +3068,77 @@ export function useListStaff<TData = Awaited<ReturnType<typeof listStaff>>, TErr
 
 
 
+
+export const getInviteStaffUrl = () => {
+
+
+
+
+  return `/api/staff/invite`
+}
+
+/**
+ * @summary Invite a staff member through the server-side Supabase Admin API
+ */
+export const inviteStaff = async (staffInviteInput: StaffInviteInput, options?: Parameters<typeof customFetch>[1]): Promise<AppUser> => {
+
+  return customFetch<AppUser>(getInviteStaffUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(staffInviteInput)
+  }
+);}
+
+
+
+
+
+export const getInviteStaffMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteStaff>>, TError,{data: BodyType<StaffInviteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof inviteStaff>>, TError,{data: BodyType<StaffInviteInput>}, TContext> => {
+
+const mutationKey = ['inviteStaff'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof inviteStaff>>, {data: BodyType<StaffInviteInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  inviteStaff(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InviteStaffMutationResult = NonNullable<Awaited<ReturnType<typeof inviteStaff>>>
+    export type InviteStaffMutationBody = BodyType<StaffInviteInput>
+    export type InviteStaffMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Invite a staff member through the server-side Supabase Admin API
+ */
+export const useInviteStaff = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteStaff>>, TError,{data: BodyType<StaffInviteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof inviteStaff>>,
+        TError,
+        {data: BodyType<StaffInviteInput>},
+        TContext
+      > => {
+      return useMutation(getInviteStaffMutationOptions(options));
+    }
 
 export const getUpdateStaffRoleUrl = (id: string,) => {
 

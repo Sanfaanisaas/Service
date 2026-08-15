@@ -26,7 +26,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session) { setProfile(null); if (sessionResolved) setLoading(false); return; }
     setLoading(true);
-    getCurrentUser().then(setProfile).catch(() => setProfile(null)).finally(() => setLoading(false));
+    getCurrentUser().then(setProfile).catch(async (error: unknown) => {
+      setProfile(null);
+      const status = (error as { status?: number }).status;
+      if (status === 401 || status === 403) {
+        await supabase?.auth.signOut();
+        setSession(null);
+        queryClient.clear();
+      }
+    }).finally(() => setLoading(false));
   }, [session?.access_token, sessionResolved]);
   const value = useMemo(() => ({ session, profile, loading, configured: authConfigured, signOut: async () => {
     await supabase?.auth.signOut();

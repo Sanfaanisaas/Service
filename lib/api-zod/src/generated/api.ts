@@ -1311,6 +1311,34 @@ export const ListStaffResponse = zod.array(ListStaffResponseItem)
 
 
 /**
+ * @summary Invite a staff member through the server-side Supabase Admin API
+ */
+export const inviteStaffBodyEmailMax = 254;
+
+export const inviteStaffBodyNameMin = 2;
+export const inviteStaffBodyNameMax = 120;
+
+export const inviteStaffBodyRoleDefault = `staff`;
+
+export const InviteStaffBody = zod.object({
+  "email": zod.email().max(inviteStaffBodyEmailMax),
+  "name": zod.string().min(inviteStaffBodyNameMin).max(inviteStaffBodyNameMax).optional(),
+  "role": zod.enum(['staff']).default(inviteStaffBodyRoleDefault)
+})
+
+export const InviteStaffResponse = zod.object({
+  "id": zod.string().describe('Supabase user id'),
+  "appUserId": zod.string(),
+  "email": zod.email(),
+  "name": zod.string().nullish(),
+  "role": zod.enum(['admin', 'staff', 'customer']),
+  "customerId": zod.string().nullish(),
+  "active": zod.boolean().optional(),
+  "createdAt": zod.coerce.date().optional()
+})
+
+
+/**
  * @summary Change a user role and record its audit history
  */
 export const UpdateStaffRoleParams = zod.object({

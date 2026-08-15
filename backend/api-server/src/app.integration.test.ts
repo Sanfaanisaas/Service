@@ -5,11 +5,17 @@ import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   it,
   vi,
 } from "vitest";
+
+const supabaseAdmin = vi.hoisted(() => ({
+  inviteUserByEmail: vi.fn(),
+  deleteUser: vi.fn(),
+}));
 
 type Identity = {
   id: string;
@@ -49,6 +55,7 @@ vi.mock("@supabase/supabase-js", () => ({
         identities[token]
           ? { data: { user: identities[token] }, error: null }
           : { data: { user: null }, error: new Error("invalid token") },
+      admin: supabaseAdmin,
     },
   }),
 }));
@@ -135,12 +142,30 @@ beforeAll(async () => {
     SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key-that-is-long-enough",
     SANFAANI_ADMIN_EMAIL: identities.admin.email,
     CLIENT_URL: "http://localhost:3000",
+    VAPID_PUBLIC_KEY: "",
+    VAPID_PRIVATE_KEY: "",
   });
   ({ connectDatabase, disconnectDatabase } = await import("./lib/database.js"));
   models = await import("./models/index.js");
   ({ app } = await import("./app.js"));
   await connectDatabase();
   await Promise.all(Object.values(models).map((model) => model.init()));
+});
+
+beforeEach(async () => {
+  await Promise.all(Object.values(models).map((model) => model.deleteMany({})));
+  supabaseAdmin.inviteUserByEmail.mockReset();
+  supabaseAdmin.deleteUser.mockReset();
+  supabaseAdmin.inviteUserByEmail.mockResolvedValue({
+    data: {
+      user: {
+        id: "supabase-invited-staff",
+        email: "invited@sanfaani.test",
+      },
+    },
+    error: null,
+  });
+  supabaseAdmin.deleteUser.mockResolvedValue({ data: {}, error: null });
 });
 
 afterEach(async () => {
@@ -257,6 +282,75 @@ describe("SANFAANI auth and RBAC", () => {
       .expect(200);
   });
 
+  it("allows only administrators to invite an audited active staff user", async () => {
+    await provision("admin", "admin");
+    await provision("staff", "staff");
+    await provisionCustomer("customerA", "08000000001");
+
+    const invitation = {
+      email: "Invited@SANFAANI.test",
+      name: "Invited Operator",
+      role: "staff",
+    };
+    await api()
+      .post("/api/staff/invite")
+      .set(auth("staff"))
+      .send(invitation)
+      .expect(403);
+    await api()
+      .post("/api/staff/invite")
+      .set(auth("customerA"))
+      .send(invitation)
+      .expect(403);
+    await api()
+      .post("/api/staff/invite")
+      .set(auth("admin"))
+      .send({ ...invitation, role: "admin" })
+      .expect(400);
+
+    supabaseAdmin.inviteUserByEmail.mockResolvedValueOnce({
+      data: { user: { id: "supabase-failed-invite", email: "failed@sanfaani.test" } },
+      error: null,
+    });
+    const failedAudit = vi.spyOn(models.AuditLog, "create")
+      .mockRejectedValueOnce(new Error("controlled invite audit failure"));
+    await api()
+      .post("/api/staff/invite")
+      .set(auth("admin"))
+      .send({ ...invitation, email: "failed@sanfaani.test" })
+      .expect(500);
+    failedAudit.mockRestore();
+    expect(supabaseAdmin.deleteUser).toHaveBeenCalledWith("supabase-failed-invite");
+    expect(await models.AppUser.exists({ supabaseUserId: "supabase-failed-invite" })).toBeNull();
+
+    const response = await api()
+      .post("/api/staff/invite")
+      .set(auth("admin"))
+      .send(invitation)
+      .expect(201);
+    expect(response.body.data).toMatchObject({
+      id: "supabase-invited-staff",
+      email: "invited@sanfaani.test",
+      name: "Invited Operator",
+      role: "staff",
+      active: true,
+      customerId: null,
+    });
+    expect(supabaseAdmin.inviteUserByEmail).toHaveBeenCalledWith(
+      "invited@sanfaani.test",
+      {
+        redirectTo: "http://localhost:3000/reset-password",
+        data: { name: "Invited Operator" },
+      },
+    );
+    expect(
+      await models.AuditLog.findOne({ action: "STAFF_INVITED" }),
+    ).toMatchObject({
+      actorId: identities.admin.id,
+      entityType: "user",
+    });
+  });
+
   it("preserves one active administrator while allowing audited account access changes", async () => {
     const admin = await provision("admin", "admin");
     await api()
@@ -288,6 +382,19 @@ describe("SANFAANI auth and RBAC", () => {
 });
 
 describe("customer ownership", () => {
+  it("keeps dormant customer self-service APIs available after production UI removal", async () => {
+    await provisionCustomer("customerA", "08000000010");
+    for (const path of [
+      "/api/customer/me",
+      "/api/customer/me/charging?view=latest",
+      "/api/customer/me/workspace",
+      "/api/customer/me/receipts",
+      "/api/customer/me/notifications",
+    ]) {
+      await api().get(path).set(auth("customerA")).expect(200);
+    }
+  });
+
   it("returns only customer A charging, workspace, receipts, and notifications", async () => {
     await provision("staff", "staff");
     const customerA = await provisionCustomer("customerA", "08000000011");
@@ -535,6 +642,79 @@ describe("customer profile and consent", () => {
 });
 
 describe("atomic operations and financial records", () => {
+  it("rolls back charging, sale, and workspace writes when receipt creation fails", async () => {
+    await provision("staff", "staff");
+    await updateSettings({ chargingCapacity: 2, workspaceCapacity: 2 });
+
+    const failNextReceipt = () => vi
+      .spyOn(models.Receipt, "create")
+      .mockRejectedValueOnce(new Error("controlled receipt failure"));
+
+    let receiptFailure = failNextReceipt();
+    const chargingFailure = await checkIn("08000000050", "rollback")
+      .expect(500);
+    receiptFailure.mockRestore();
+    expect(chargingFailure.body).toEqual({
+      success: false,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "SANFAANI could not complete this operation.",
+      },
+    });
+    expect(await models.Customer.countDocuments({ phone: "08000000050" })).toBe(0);
+    expect(await models.ChargingSession.countDocuments()).toBe(0);
+    expect(await models.ResourceLock.countDocuments({ resource: "charging", occupied: true })).toBe(0);
+    expect(await models.ResourceLock.countDocuments({ resource: "charging", referenceId: { $ne: null } })).toBe(0);
+    expect(await models.Transaction.countDocuments()).toBe(0);
+    expect(await models.Receipt.countDocuments()).toBe(0);
+    expect(await models.AuditLog.countDocuments()).toBe(0);
+
+    const product = await models.Product.create({
+      sku: "ROLLBACK-SALE",
+      name: "Rollback sale",
+      category: "test",
+      costPrice: 50,
+      sellingPrice: 100,
+      quantityOnHand: 2,
+      reorderThreshold: 0,
+    });
+    receiptFailure = failNextReceipt();
+    await api()
+      .post("/api/sales")
+      .set(auth("staff"))
+      .send({
+        items: [{ productId: product.id, quantity: 1 }],
+        paymentMethod: "cash",
+      })
+      .expect(500);
+    receiptFailure.mockRestore();
+    expect((await models.Product.findById(product.id))?.quantityOnHand).toBe(2);
+    expect(await models.Sale.countDocuments()).toBe(0);
+    expect(await models.InventoryMovement.countDocuments()).toBe(0);
+    expect(await models.Transaction.countDocuments()).toBe(0);
+    expect(await models.Receipt.countDocuments()).toBe(0);
+
+    receiptFailure = failNextReceipt();
+    await api()
+      .post("/api/workspace/register")
+      .set(auth("staff"))
+      .send({
+        customerName: "Workspace rollback",
+        phone: "08000000051",
+        amount: 200,
+        paymentMethod: "cash",
+      })
+      .expect(500);
+    receiptFailure.mockRestore();
+    expect(await models.Customer.countDocuments({ phone: "08000000051" })).toBe(0);
+    expect(await models.WorkspaceBooking.countDocuments()).toBe(0);
+    expect(await models.ResourceLock.countDocuments({ resource: "workspace", occupied: true })).toBe(0);
+    expect(await models.ResourceLock.countDocuments({ resource: "workspace", referenceId: { $ne: null } })).toBe(0);
+    expect(await models.Transaction.countDocuments()).toBe(0);
+    expect(await models.Receipt.countDocuments()).toBe(0);
+    expect(await models.AuditLog.countDocuments()).toBe(0);
+  });
+
   it("creates products and records audited stock adjustments", async () => {
     await provision("admin", "admin");
     const created = await api()
