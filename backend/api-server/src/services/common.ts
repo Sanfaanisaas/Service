@@ -16,9 +16,13 @@ export async function customerByPhone(input: {
   return Customer.findOneAndUpdate(
     { phone: input.phone },
     {
-      $set: { name: input.customerName, ...(input.email ? { email: input.email } : {}) },
+      $set: {
+        name: input.customerName,
+        ...(input.email ? { email: input.email } : {}),
+        ...(typeof input.whatsappOptIn === 'boolean' ? { whatsappOptIn: input.whatsappOptIn } : {}),
+      },
       $setOnInsert: {
-        phone: input.phone, whatsappOptIn: input.whatsappOptIn ?? false,
+        phone: input.phone,
         notificationPreferences: { push: false, inApp: true },
       },
     },

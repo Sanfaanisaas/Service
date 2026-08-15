@@ -32,8 +32,31 @@ test.describe("RC-01 real authentication and authorization", () => {
     page,
   }) => {
     await login(page, "customerA");
-    expect((await api(page, "GET", "/api/settings")).status()).toBe(403);
-    expect((await api(page, "GET", "/api/charging")).status()).toBe(403);
+    for (const path of [
+      "/api/settings",
+      "/api/charging",
+      "/api/workspace",
+      "/api/customers",
+      "/api/products",
+      "/api/sales",
+      "/api/transactions",
+      "/api/receipts",
+      "/api/staff",
+      "/api/dashboard/summary",
+    ]) {
+      expect((await api(page, "GET", path)).status()).toBe(403);
+    }
+    for (const path of [
+      "/admin/dashboard",
+      "/admin/settings",
+      "/admin/staff",
+      "/admin/analytics",
+      "/admin/inventory",
+      "/admin/transactions",
+    ]) {
+      await page.goto(path);
+      await expect(page).toHaveURL(/\/customer$/);
+    }
     const customerMe = await api(page, "GET", "/api/me?role=admin");
     expect(customerMe.status()).toBe(200);
     expect((await customerMe.json()).data.role).toBe("customer");

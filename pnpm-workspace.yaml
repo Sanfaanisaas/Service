@@ -64,16 +64,13 @@ catalog:
 
 autoInstallPeers: false
 
-onlyBuiltDependencies:
-  - '@swc/core'
-  - esbuild
-  - msw
-  - unrs-resolver
-
 overrides:
   esbuild: "0.27.3"
 
 allowBuilds:
-  core-js: set this to true or false
-  esbuild: false
+  '@swc/core': true
+  core-js: false
+  esbuild: true
   mongodb-memory-server: true
+  msw: true
+  unrs-resolver: true

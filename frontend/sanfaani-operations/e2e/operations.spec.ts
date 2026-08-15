@@ -63,7 +63,13 @@ test.describe("RC-01 transactional browser workflows", () => {
       .locator('[data-testid^="row-charging-"]')
       .filter({ hasText: customerName });
     await expect(row).toBeVisible();
+    const readyResponse = page.waitForResponse(
+      (response) =>
+        /\/api\/charging\/[^/?]+\/status$/.test(response.url()) &&
+        response.request().method() === "PATCH",
+    );
     await row.locator('[data-testid^="button-ready-"]').click();
+    expect((await readyResponse).status()).toBe(200);
     await expect(row).toContainText("ready");
     const verified = await api(page, "POST", "/api/charging/verify-claim", {
       token: receipt.claimToken,
@@ -106,6 +112,13 @@ test.describe("RC-01 transactional browser workflows", () => {
       .locator('[data-testid^="row-product-"]')
       .filter({ hasText: sku });
     await expect(row).toContainText("3");
+    await row.locator('[data-testid^="button-adjust-product-"]').click();
+    await page.getByTestId("input-stock-adjustment-quantity").fill("2");
+    await page
+      .getByTestId("input-stock-adjustment-reason")
+      .fill("RC browser restock");
+    await page.getByTestId("button-submit-stock-adjustment").click();
+    await expect(row).toContainText("5");
 
     const products = await api(
       page,
@@ -116,7 +129,7 @@ test.describe("RC-01 transactional browser workflows", () => {
       id: string;
       quantityOnHand: number;
     };
-    expect(product.quantityOnHand).toBe(3);
+    expect(product.quantityOnHand).toBe(5);
     try {
       await page.goto("/admin/sales");
       await page.getByRole("button").filter({ hasText: productName }).click();
@@ -134,9 +147,9 @@ test.describe("RC-01 transactional browser workflows", () => {
         "GET",
         `/api/products?search=${encodeURIComponent(sku)}`,
       );
-      expect((await afterSale.json()).data[0].quantityOnHand).toBe(2);
+      expect((await afterSale.json()).data[0].quantityOnHand).toBe(4);
       const oversell = await api(page, "POST", "/api/sales", {
-        items: [{ productId: product.id, quantity: 3 }],
+        items: [{ productId: product.id, quantity: 5 }],
         paymentMethod: "cash",
       });
       expect(oversell.status()).toBe(409);
@@ -145,12 +158,22 @@ test.describe("RC-01 transactional browser workflows", () => {
         "GET",
         `/api/products?search=${encodeURIComponent(sku)}`,
       );
-      expect((await afterRejected.json()).data[0].quantityOnHand).toBe(2);
-      expect(
-        (
-          await api(page, "GET", `/api/products/${product.id}/movements`)
-        ).status(),
-      ).toBe(200);
+      expect((await afterRejected.json()).data[0].quantityOnHand).toBe(4);
+      const movements = await api(
+        page,
+        "GET",
+        `/api/products/${product.id}/movements`,
+      );
+      expect(movements.status()).toBe(200);
+      expect((await movements.json()).data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "restock",
+            quantity: 2,
+            reason: "RC browser restock",
+          }),
+        ]),
+      );
     } finally {
       await api(page, "DELETE", `/api/products/${product.id}`);
     }
@@ -160,6 +183,7 @@ test.describe("RC-01 transactional browser workflows", () => {
     page,
   }) => {
     const visitor = unique("Workspace");
+    const phone = testPhone(Date.now() + 1);
     await login(page, "staff");
     const before = await api(page, "GET", "/api/dashboard/summary");
     const occupiedBefore = (await before.json()).data.workspace
@@ -169,8 +193,9 @@ test.describe("RC-01 transactional browser workflows", () => {
     await page.getByTestId("input-workspace-name").fill(visitor);
     await page
       .getByTestId("input-workspace-phone")
-      .fill(testPhone(Date.now() + 1));
+      .fill(phone);
     await page.getByTestId("input-workspace-amount").fill("1000");
+    await page.getByTestId("input-workspace-whatsapp").check();
     await page.getByTestId("button-submit-workspace").click();
     await expect(
       page.getByRole("dialog", { name: "Visitor registered" }),
@@ -179,6 +204,15 @@ test.describe("RC-01 transactional browser workflows", () => {
       .getByRole("dialog", { name: "Visitor registered" })
       .getByRole("button", { name: "Done" })
       .click();
+    const customers = await api(
+      page,
+      "GET",
+      `/api/customers?search=${encodeURIComponent(phone)}`,
+    );
+    expect((await customers.json()).data[0]).toMatchObject({
+      phone,
+      whatsappOptIn: true,
+    });
     const row = page
       .locator('[data-testid^="row-workspace-"]')
       .filter({ hasText: visitor });

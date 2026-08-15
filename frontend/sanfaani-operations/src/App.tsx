@@ -27,6 +27,7 @@ import {
 import type {
   AppUser, ChargingCheckInInput, ChargingCheckInResult, ChargingSession, HistoryRecord, Product, SaleInput, WorkspaceBooking, Receipt, SettingsInput
 } from '@workspace/api-client-react';
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import { ErrorBoundary } from '@/components/error-boundary';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { authConfigured, supabase } from '@/lib/supabase';

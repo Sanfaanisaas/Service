@@ -10,6 +10,7 @@ export type AuthTokenGetter = () => Promise<string | null> | string | null;
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
+const REQUEST_TIMEOUT_MS = 8_000;
 
 // ---------------------------------------------------------------------------
 // Module-level configuration
@@ -155,6 +156,23 @@ function getStringField(value: unknown, key: string): string | undefined {
 
 function truncate(text: string, maxLength = 300): string {
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
+async function withRequestTimeout<T>(operation: Promise<T>): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error("The SANFAANI request timed out. Check the connection and retry.")),
+          REQUEST_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
 }
 
 function buildErrorMessage(response: Response, data: unknown): string {
@@ -364,7 +382,7 @@ export async function customFetch<T = unknown>(
   // Attach bearer token when an auth getter is configured and no
   // Authorization header has been explicitly provided.
   if (_authTokenGetter && !headers.has("authorization")) {
-    const token = await _authTokenGetter();
+    const token = await withRequestTimeout(Promise.resolve(_authTokenGetter()));
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
     }
@@ -372,7 +390,33 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  const controller = typeof AbortController === "undefined" ? null : new AbortController();
+  const sourceSignal = init.signal;
+  const abortFromSource = () => controller?.abort(sourceSignal?.reason);
+  if (sourceSignal?.aborted) abortFromSource();
+  else sourceSignal?.addEventListener("abort", abortFromSource, { once: true });
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      controller?.abort();
+      reject(new Error("The SANFAANI request timed out. Check the connection and retry."));
+    }, REQUEST_TIMEOUT_MS);
+  });
+  let response: Response;
+  try {
+    response = await Promise.race([
+      fetch(input, {
+        ...init,
+        method,
+        headers,
+        signal: controller?.signal ?? sourceSignal,
+      }),
+      timedOut,
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+    sourceSignal?.removeEventListener("abort", abortFromSource);
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

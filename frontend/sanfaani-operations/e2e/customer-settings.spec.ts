@@ -37,7 +37,7 @@ test.describe("RC-01 settings, profile, and customer isolation", () => {
       ).toBeVisible();
       await page.goto("/admin/charging");
       await expect(
-        page.getByText(String(nextCapacity), { exact: true }).first(),
+        page.getByText(new RegExp(`/ ${nextCapacity} occupied$`)),
       ).toBeVisible();
     } finally {
       expect(

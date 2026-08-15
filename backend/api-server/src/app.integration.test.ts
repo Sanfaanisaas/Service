@@ -211,11 +211,21 @@ describe("SANFAANI auth and RBAC", () => {
   it("enforces operational and administrator privileges", async () => {
     await provision("staff", "staff");
     await provisionCustomer("customerA", "08000000001");
-    await api().get("/api/charging").set(auth("customerA")).expect(403);
-    await api()
-      .get("/api/dashboard/summary")
-      .set(auth("customerA"))
-      .expect(403);
+    for (const path of [
+      "/api/charging",
+      "/api/workspace",
+      "/api/customers",
+      "/api/products",
+      "/api/sales",
+      "/api/transactions",
+      "/api/receipts",
+      "/api/history",
+      "/api/dashboard/summary",
+      "/api/settings",
+      "/api/staff",
+    ]) {
+      await api().get(path).set(auth("customerA")).expect(403);
+    }
     await api()
       .patch("/api/settings")
       .set(auth("customerA"))
@@ -283,8 +293,8 @@ describe("customer ownership", () => {
     const customerA = await provisionCustomer("customerA", "08000000011");
     const customerB = await provisionCustomer("customerB", "08000000012");
     const chargingA = await checkIn("08000000011", "A").expect(201);
-    await checkIn("08000000012", "B").expect(201);
-    await api()
+    const chargingB = await checkIn("08000000012", "B").expect(201);
+    const workspaceA = await api()
       .post("/api/workspace/register")
       .set(auth("staff"))
       .send({
@@ -294,7 +304,7 @@ describe("customer ownership", () => {
         paymentMethod: "cash",
       })
       .expect(201);
-    await api()
+    const workspaceB = await api()
       .post("/api/workspace/register")
       .set(auth("staff"))
       .send({
@@ -359,6 +369,67 @@ describe("customer ownership", () => {
       .set(auth("customerA"))
       .expect(200);
     expect(notifications.body.data).toHaveLength(1);
+    expect(notifications.body.data[0].customerId).toBe(customerA.id);
+    const chargingForB = await api()
+      .get(`/api/customer/me/charging?view=history&customerId=${customerA.id}`)
+      .set(auth("customerB"))
+      .expect(200);
+    expect(chargingForB.body.data.recentSessions).toHaveLength(1);
+    expect(chargingForB.body.data.recentSessions[0].id).toBe(
+      chargingB.body.data.session.id,
+    );
+    const workspaceForB = await api()
+      .get(`/api/customer/me/workspace?customerId=${customerA.id}`)
+      .set(auth("customerB"))
+      .expect(200);
+    expect(workspaceForB.body.data).toHaveLength(1);
+    expect(workspaceForB.body.data[0].id).toBe(
+      workspaceB.body.data.booking.id,
+    );
+    const receiptsForB = await api()
+      .get(`/api/customer/me/receipts?customerId=${customerA.id}`)
+      .set(auth("customerB"))
+      .expect(200);
+    expect(receiptsForB.body.data).toHaveLength(2);
+    expect(
+      receiptsForB.body.data.every(
+        (receipt: { customerId: string }) => receipt.customerId === customerB.id,
+      ),
+    ).toBe(true);
+    const notificationsForB = await api()
+      .get(`/api/customer/me/notifications?customerId=${customerA.id}`)
+      .set(auth("customerB"))
+      .expect(200);
+    expect(notificationsForB.body.data).toHaveLength(1);
+    expect(notificationsForB.body.data[0].customerId).toBe(customerB.id);
+    await api()
+      .get(`/api/customer/me/receipts/${chargingA.body.data.receipt.id}`)
+      .set(auth("customerB"))
+      .expect(404);
+    await api()
+      .patch(`/api/customer/me/notifications/${notifications.body.data[0].id}/read`)
+      .set(auth("customerB"))
+      .expect(404);
+    const profileForB = await api()
+      .patch("/api/customer/me")
+      .set(auth("customerB"))
+      .send({
+        customerId: customerA.id,
+        name: "Customer B",
+        phone: "08000000012",
+        whatsappOptIn: false,
+        notificationPreferences: {
+          inApp: true,
+          chargingReminders: true,
+          workspaceAvailability: false,
+        },
+      })
+      .expect(200);
+    expect(profileForB.body.data.id).toBe(customerB.id);
+    expect(await models.WorkspaceBooking.countDocuments({
+      _id: workspaceA.body.data.booking.id,
+      customerId: customerA.id,
+    })).toBe(1);
     const marked = await api()
       .patch(
         `/api/customer/me/notifications/${notifications.body.data[0].id}/read`,
@@ -464,6 +535,58 @@ describe("customer profile and consent", () => {
 });
 
 describe("atomic operations and financial records", () => {
+  it("creates products and records audited stock adjustments", async () => {
+    await provision("admin", "admin");
+    const created = await api()
+      .post("/api/products")
+      .set(auth("admin"))
+      .send({
+        sku: "RC-RESTOCK",
+        name: "RC restock product",
+        category: "test",
+        costPrice: 50,
+        sellingPrice: 100,
+        quantityOnHand: 2,
+        reorderThreshold: 1,
+      })
+      .expect(201);
+    const productId = created.body.data.id;
+    await api()
+      .post(`/api/products/${productId}/adjust`)
+      .set(auth("admin"))
+      .send({
+        quantity: 3,
+        type: "restock",
+        reason: "RC verification restock",
+      })
+      .expect(200);
+
+    expect((await models.Product.findById(productId))?.quantityOnHand).toBe(5);
+    expect(await models.InventoryMovement.find({ productId }).sort({ createdAt: 1 })).toMatchObject([
+      {
+        previousQuantity: 0,
+        quantity: 2,
+        newQuantity: 2,
+        type: "opening",
+        createdBy: identities.admin.id,
+      },
+      {
+        previousQuantity: 2,
+        quantity: 3,
+        newQuantity: 5,
+        type: "restock",
+        reason: "RC verification restock",
+        createdBy: identities.admin.id,
+      },
+    ]);
+    expect(
+      await models.AuditLog.countDocuments({
+        action: "INVENTORY_ADJUSTED",
+        entityId: productId,
+      }),
+    ).toBe(1);
+  });
+
   it("verifies the secure QR credential and rejects it after one collection", async () => {
     await provision("staff", "staff");
     const created = await checkIn("08000000021", "secure-claim").expect(201);
@@ -477,6 +600,16 @@ describe("atomic operations and financial records", () => {
       .set(auth("staff"))
       .send({ status: "ready" })
       .expect(200);
+    await api()
+      .post("/api/charging/verify-claim")
+      .set(auth("staff"))
+      .send({ token: "x".repeat(43) })
+      .expect(404);
+    await api()
+      .post(`/api/charging/${session!.id}/collect`)
+      .set(auth("staff"))
+      .send({ claimId: "SF-CHG-WRONG-CLAIM" })
+      .expect(404);
     const verified = await api()
       .post("/api/charging/verify-claim")
       .set(auth("staff"))
@@ -518,6 +651,13 @@ describe("atomic operations and financial records", () => {
     const sessions = await models.ChargingSession.find({
       status: { $in: ["checked-in", "charging", "ready"] },
     });
+    expect(await models.Receipt.countDocuments({ type: "charging" })).toBe(40);
+    expect(
+      await models.Transaction.countDocuments({ type: "charging_fee" }),
+    ).toBe(40);
+    expect(
+      await models.AuditLog.countDocuments({ action: "CHARGING_CHECKED_IN" }),
+    ).toBe(40);
     expect(new Set(sessions.map((session) => session.slotNumber)).size).toBe(
       40,
     );
@@ -619,6 +759,30 @@ describe("atomic operations and financial records", () => {
       .post(`/api/workspace/${bookingId}/check-in`)
       .set(auth("staff"))
       .expect(200);
+    const beforeRejected = {
+      bookings: await models.WorkspaceBooking.countDocuments(),
+      receipts: await models.Receipt.countDocuments(),
+      transactions: await models.Transaction.countDocuments(),
+      audits: await models.AuditLog.countDocuments(),
+    };
+    await api()
+      .post("/api/workspace/register")
+      .set(auth("staff"))
+      .send({
+        customerName: "Rejected workspace visitor",
+        phone: "08000000043",
+        amount: 200,
+        paymentMethod: "cash",
+      })
+      .expect(409);
+    expect(await models.WorkspaceBooking.countDocuments()).toBe(
+      beforeRejected.bookings,
+    );
+    expect(await models.Receipt.countDocuments()).toBe(beforeRejected.receipts);
+    expect(await models.Transaction.countDocuments()).toBe(
+      beforeRejected.transactions,
+    );
+    expect(await models.AuditLog.countDocuments()).toBe(beforeRejected.audits);
     await api()
       .post(`/api/workspace/${bookingId}/check-out`)
       .set(auth("staff"))
@@ -637,6 +801,31 @@ describe("atomic operations and financial records", () => {
     expect(await models.AuditLog.countDocuments({ action: "WORKSPACE_CHECKED_OUT", entityId: bookingId })).toBe(1);
     const active = await api().get("/api/workspace").set(auth("staff")).expect(200);
     expect(active.body.data).toHaveLength(0);
+  });
+
+  it("persists explicit WhatsApp consent for an existing workspace customer", async () => {
+    await provision("staff", "staff");
+    const customer = await models.Customer.create({
+      name: "Existing workspace customer",
+      phone: "08000000042",
+      whatsappOptIn: false,
+    });
+
+    await api()
+      .post("/api/workspace/register")
+      .set(auth("staff"))
+      .send({
+        customerName: "Existing workspace customer",
+        phone: "08000000042",
+        amount: 0,
+        paymentMethod: "cash",
+        whatsappOptIn: true,
+      })
+      .expect(201);
+
+    expect((await models.Customer.findById(customer.id))?.whatsappOptIn).toBe(
+      true,
+    );
   });
 
   it("audits role changes with the actor, previous role, and new role", async () => {

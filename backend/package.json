@@ -5,5 +5,8 @@
     "dev": "pnpm --filter \"./**\" --parallel run dev",
     "build": "pnpm --filter \"./**\" run build",
     "typecheck": "pnpm --filter \"./**\" run typecheck"
+  },
+  "dependencies": {
+    "@vercel/speed-insights": "^2.0.0"
   }
 }
