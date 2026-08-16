@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 describe("production frontend security headers", () => {
   it("ships CSP, frame protection, content sniffing protection, referrer policy, and HSTS", async () => {
     const config = JSON.parse(
-      await readFile(new URL("../../vercel.json", import.meta.url), "utf8"),
+      await readFile(new URL("../../../vercel.json", import.meta.url), "utf8"),
     );
     const catchAll = config.headers.find(
       (entry: { source: string }) => entry.source === "/(.*)",

@@ -44,7 +44,20 @@ pnpm test
 pnpm build
 ```
 
-Deploy the backend first, then set `VITE_API_URL` and deploy `frontend/` with its `vercel.json`. Confirm `GET /api/health` returns only `{ "success": true, "data": { "status": "ok" } }`.
+Deploy the backend first, then set `VITE_API_URL` and deploy the repository root to Vercel. The single authoritative Vercel configuration is `/vercel.json`; do not configure `frontend` or `frontend/sanfaani-operations` as Vercel's Root Directory. Confirm `GET /api/health` returns only `{ "success": true, "data": { "status": "ok" } }`.
+
+### Vercel production project
+
+- Root Directory: repository root / blank
+- Framework Preset: Vite
+- Install Command: `pnpm install --frozen-lockfile`
+- Build Command: `pnpm --filter @workspace/sanfaani-operations run build`
+- Output Directory: `frontend/sanfaani-operations/dist/client`
+- Production frontend: `https://service-operations.vercel.app`
+
+The root configuration preserves the reviewed CSP, HSTS, frame-denial, `nosniff`, referrer, permissions, and service-worker headers. Its SPA rewrite serves `index.html` for `/`, `/sign-in`, `/admin/*`, and `/staff/*` so browser refreshes cannot become Vercel 404s. Set the backend `CLIENT_URL` to the final Vercel production origin exactly; do not use wildcard CORS.
+
+Speed Insights uses the Vite/React adapter (`@vercel/speed-insights/react`) and is owned by the operations application package. It does not require any public secret.
 
 ## Security acceptance
 
