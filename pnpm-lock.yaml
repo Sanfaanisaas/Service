@@ -72,11 +72,7 @@ importers:
         specifier: ~5.9.3
         version: 5.9.3
 
-  backend:
-    dependencies:
-      '@vercel/speed-insights':
-        specifier: ^2.0.0
-        version: 2.0.0(react@19.1.0)
+  backend: {}
 
   backend/api-server:
     dependencies:
@@ -141,9 +137,6 @@ importers:
 
   frontend:
     dependencies:
-      '@vercel/speed-insights':
-        specifier: ^2.0.0
-        version: 2.0.0(react@19.1.0)
       styled-components:
         specifier: ^6.5.2
         version: 6.5.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -153,6 +146,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.112.3
         version: 2.112.3
+      '@vercel/speed-insights':
+        specifier: ^2.0.0
+        version: 2.0.0(react@19.1.0)
       jspdf:
         specifier: ^4.2.1
         version: 4.2.1

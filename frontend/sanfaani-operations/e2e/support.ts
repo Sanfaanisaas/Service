@@ -1,6 +1,6 @@
 import { expect, type APIResponse, type Page } from "@playwright/test";
 
-export type TestRole = "admin" | "staff" | "customerA" | "customerB";
+export type TestRole = "admin" | "staff" | "customer";
 
 const credentials: Record<
   TestRole,
@@ -16,15 +16,10 @@ const credentials: Record<
     password: process.env.E2E_STAFF_PASSWORD ?? "",
     destination: /\/staff\/dashboard$/,
   },
-  customerA: {
-    email: process.env.E2E_CUSTOMER_A_EMAIL ?? "",
-    password: process.env.E2E_CUSTOMER_A_PASSWORD ?? "",
-    destination: /\/customer$/,
-  },
-  customerB: {
-    email: process.env.E2E_CUSTOMER_B_EMAIL ?? "",
-    password: process.env.E2E_CUSTOMER_B_PASSWORD ?? "",
-    destination: /\/customer$/,
+  customer: {
+    email: process.env.E2E_CUSTOMER_EMAIL ?? "",
+    password: process.env.E2E_CUSTOMER_PASSWORD ?? "",
+    destination: /\/access-restricted$/,
   },
 };
 

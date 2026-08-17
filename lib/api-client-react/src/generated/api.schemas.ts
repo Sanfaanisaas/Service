@@ -165,6 +165,24 @@ export interface RoleUpdateInput {
   role: RoleUpdateInputRole;
 }
 
+export type StaffInviteInputRole = typeof StaffInviteInputRole[keyof typeof StaffInviteInputRole];
+
+
+export const StaffInviteInputRole = {
+  staff: 'staff',
+} as const;
+
+export interface StaffInviteInput {
+  /** @maxLength 254 */
+  email: string;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  name?: string;
+  role?: StaffInviteInputRole;
+}
+
 export interface ActiveUpdateInput {
   active: boolean;
 }

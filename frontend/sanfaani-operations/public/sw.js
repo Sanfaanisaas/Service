@@ -1,4 +1,4 @@
-const CACHE = 'sanfaani-shell-v1';
+const CACHE = 'sanfaani-operations-shell-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -26,7 +26,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let payload = { title: 'SANFAANI', body: 'You have a new update.', url: '/customer/notifications', tag: 'sanfaani-update' };
+  let payload = { title: 'SANFAANI', body: 'You have a new operational update.', url: '/admin/notifications', tag: 'sanfaani-update' };
   try { payload = { ...payload, ...event.data?.json() }; } catch { /* Use privacy-safe defaults. */ }
   event.waitUntil(self.registration.showNotification(payload.title, {
     body: payload.body, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png',
@@ -36,7 +36,9 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = new URL(event.notification.data?.url || '/customer/notifications', self.location.origin).href;
+  const requested = new URL(event.notification.data?.url || '/admin/notifications', self.location.origin);
+  const safePath = requested.origin === self.location.origin && requested.pathname.startsWith('/admin/') ? requested.pathname : '/sign-in';
+  const target = new URL(safePath, self.location.origin).href;
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
     const existing = windows.find((client) => client.url.startsWith(self.location.origin));
     return existing ? existing.navigate(target).then(() => existing.focus()) : self.clients.openWindow(target);

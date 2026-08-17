@@ -229,4 +229,83 @@ test.describe("RC-01 transactional browser workflows", () => {
     const after = await api(page, "GET", "/api/dashboard/summary");
     expect((await after.json()).data.workspace.occupied).toBe(occupiedBefore);
   });
+
+  test("configured charging and workspace capacity reject additional work without partial records", async ({ page }) => {
+    await login(page, "admin");
+    const settingsResponse = await api(page, "GET", "/api/settings");
+    const original = (await settingsResponse.json()).data as Record<string, unknown>;
+    const summaryResponse = await api(page, "GET", "/api/dashboard/summary");
+    const summary = (await summaryResponse.json()).data as {
+      charging: { active: number };
+      workspace: { occupied: number };
+    };
+    const settingsPayload = (chargingCapacity: number, workspaceCapacity: number) => ({
+      businessName: original.businessName,
+      businessAddress: original.businessAddress ?? "",
+      phone: original.phone ?? "",
+      currency: original.currency,
+      chargingCapacity,
+      workspaceCapacity,
+      defaultChargingPrice: original.defaultChargingPrice,
+      defaultWorkspacePrice: original.defaultWorkspacePrice,
+      whatsappGroupInviteUrl: original.whatsappGroupInviteUrl ?? "",
+      businessTimezone: original.businessTimezone,
+      receiptFooter: original.receiptFooter ?? "",
+    });
+    let chargingId: string | undefined;
+    let workspaceId: string | undefined;
+    try {
+      expect((await api(page, "PATCH", "/api/settings", settingsPayload(summary.charging.active + 1, summary.workspace.occupied + 1))).status()).toBe(200);
+      const charge = await api(page, "POST", "/api/charging/check-in", {
+        customerName: unique("Capacity-Charging"), phone: testPhone(Date.now() + 11),
+        deviceType: "phone", expectedMinutes: 30, amount: 0, paymentMethod: "cash",
+      });
+      expect(charge.status()).toBe(201);
+      chargingId = (await charge.json()).data.session.id;
+      await page.goto("/admin/charging");
+      await expect(page.getByTestId("button-charging-full")).toBeVisible();
+      const rejectedCharge = await api(page, "POST", "/api/charging/check-in", {
+        customerName: unique("Capacity-Rejected"), phone: testPhone(Date.now() + 12),
+        deviceType: "phone", expectedMinutes: 30, amount: 500, paymentMethod: "cash",
+      });
+      expect(rejectedCharge.status()).toBe(409);
+
+      const workspace = await api(page, "POST", "/api/workspace/register", {
+        customerName: unique("Capacity-Workspace"), phone: testPhone(Date.now() + 13),
+        amount: 0, paymentMethod: "cash",
+      });
+      expect(workspace.status()).toBe(201);
+      workspaceId = (await workspace.json()).data.booking.id;
+      await page.goto("/admin/workspace");
+      await expect(page.getByTestId("button-new-booking")).toContainText("Workspace full");
+      const rejectedWorkspace = await api(page, "POST", "/api/workspace/register", {
+        customerName: unique("Capacity-Rejected"), phone: testPhone(Date.now() + 14),
+        amount: 1000, paymentMethod: "cash",
+      });
+      expect(rejectedWorkspace.status()).toBe(409);
+    } finally {
+      if (chargingId) await api(page, "PATCH", `/api/charging/${chargingId}/status`, { status: "cancelled" });
+      if (workspaceId) {
+        await api(page, "POST", `/api/workspace/${workspaceId}/check-in`);
+        await api(page, "POST", `/api/workspace/${workspaceId}/check-out`);
+      }
+      await api(page, "PATCH", "/api/settings", settingsPayload(Number(original.chargingCapacity), Number(original.workspaceCapacity)));
+    }
+  });
+
+  test("admin analytics and filtered CSV use persisted operational data", async ({ page }) => {
+    await login(page, "admin");
+    await page.goto("/admin/analytics");
+    await expect(page.getByRole("heading", { name: "Analytics" })).toBeVisible();
+    await page.getByTestId("select-analytics-period").selectOption("7-days");
+    const report = await api(page, "GET", "/api/analytics?period=7-days");
+    expect(report.status()).toBe(200);
+    expect((await report.json()).data).toEqual(expect.objectContaining({
+      revenue: expect.objectContaining({ income: expect.any(Number), expenses: expect.any(Number), net: expect.any(Number) }),
+      charging: expect.any(Object), workspace: expect.any(Object), inventory: expect.any(Object),
+    }));
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: /transactions csv/i }).click();
+    await expect((await download).suggestedFilename()).toMatch(/^sanfaani-transactions-/);
+  });
 });

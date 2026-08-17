@@ -643,6 +643,22 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/AppUser" }
+  /staff/invite:
+    post:
+      operationId: inviteStaff
+      tags: [staff]
+      summary: Invite a staff member through the server-side Supabase Admin API
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffInviteInput" }
+      responses:
+        "201":
+          description: Invited staff application user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppUser" }
   /staff/{id}/role:
     patch:
       operationId: updateStaffRole
@@ -823,6 +839,13 @@ components:
       required: [role]
       properties:
         role: { type: string, enum: [admin, staff, customer] }
+    StaffInviteInput:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        role: { type: string, enum: [staff], default: staff }
     ActiveUpdateInput:
       type: object
       required: [active]

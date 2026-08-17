@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, Printer, ReceiptText } from 'lucide-react';
 import {
-  getGetCustomerMyReceiptDetailQueryKey,
   getGetReceiptDetailQueryKey,
-  useGetCustomerMyReceiptDetail,
   useGetReceiptDetail,
   type Receipt,
 } from '@workspace/api-client-react';
@@ -72,18 +70,16 @@ async function downloadPdf(receipt: Receipt) {
   document.save(`SANFAANI-Receipt-${receipt.receiptNumber}.pdf`);
 }
 
-export default function ReceiptDetailPage({ customer = false, params }: { customer?: boolean; params?: { receiptId?: string } }) {
+export default function ReceiptDetailPage({ params }: { params?: { receiptId?: string } }) {
   const receiptId = params?.receiptId ?? '';
-  const adminQuery = useGetReceiptDetail(receiptId, { query: { enabled: Boolean(receiptId) && !customer, queryKey: getGetReceiptDetailQueryKey(receiptId) } });
-  const customerQuery = useGetCustomerMyReceiptDetail(receiptId, { query: { enabled: Boolean(receiptId) && customer, queryKey: getGetCustomerMyReceiptDetailQueryKey(receiptId) } });
-  const query = customer ? customerQuery : adminQuery;
+  const query = useGetReceiptDetail(receiptId, { query: { enabled: Boolean(receiptId), queryKey: getGetReceiptDetailQueryKey(receiptId) } });
   const receipt = query.data;
-  const back = customer ? '/customer/receipts' : '/admin/receipts';
+  const back = '/admin/receipts';
 
   if (query.isLoading) return <div className="mx-auto max-w-3xl animate-pulse rounded-lg bg-muted p-16" data-testid="receipt-loading" />;
   if (query.isError || !receipt) return <div className="mx-auto max-w-3xl rounded-lg border border-destructive/40 bg-destructive/10 p-8 text-destructive">This receipt is unavailable or you do not have permission to view it. <Link href={back} className="underline">Return to receipts</Link></div>;
 
-  return <div className={customer ? 'min-h-screen bg-background p-5 py-10 md:p-10' : ''}>
+  return <div>
     <div className="receipt-actions mx-auto mb-5 flex max-w-3xl flex-wrap items-center justify-between gap-3">
       <Link href={back} className="text-sm text-muted-foreground hover:text-foreground">← Back to receipts</Link>
       <div className="flex gap-2">

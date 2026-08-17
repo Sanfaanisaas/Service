@@ -14,6 +14,7 @@ import { checkIn, collect, updateStatus, verifyClaim } from '../services/chargin
 import { createProduct, adjustStock, createSale } from '../services/inventory.js';
 import { checkInWorkspace, checkOutWorkspace, registerWorkspace } from '../services/workspace.js';
 import { ACTIVE_CHARGING, ACTIVE_WORKSPACE, audit, settings } from '../services/common.js';
+import { inviteStaff } from '../services/staff.js';
 import { businessDayBounds } from '../lib/dates.js';
 
 export const operations = Router();
@@ -273,6 +274,15 @@ operations.patch('/settings', admin, asyncHandler(async (req, res) => {
 operations.get('/staff', admin, asyncHandler(async (_req, res) => {
   const users = await AppUser.find().sort({ createdAt: -1 });
   res.json({ success: true, data: users.map(appUserResponse) });
+}));
+operations.post('/staff/invite', admin, asyncHandler(async (req, res) => {
+  const input = z.object({
+    email: z.string().trim().email().max(254),
+    name: z.string().trim().min(2).max(120).optional(),
+    role: z.literal('staff').default('staff'),
+  }).parse(req.body);
+  const user = await inviteStaff(input, req.authUser!.id);
+  res.status(201).json({ success: true, data: appUserResponse(user) });
 }));
 operations.patch('/staff/:id/role', admin, asyncHandler(async (req, res) => {
   const { role } = z.object({ role: z.enum(['admin', 'staff', 'customer']) }).parse(req.body);

@@ -93,6 +93,8 @@ export * from './saleInputPaymentMethod';
 export * from './saleResult';
 export * from './settings';
 export * from './settingsInput';
+export * from './staffInviteInput';
+export * from './staffInviteInputRole';
 export * from './stockAdjustmentInput';
 export * from './stockAdjustmentInputType';
 export * from './transaction';

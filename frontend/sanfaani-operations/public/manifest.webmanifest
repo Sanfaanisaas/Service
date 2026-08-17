@@ -1,8 +1,8 @@
 {
   "name": "SANFAANI Operations",
   "short_name": "SANFAANI",
-  "description": "Charging, workspace, inventory, sales, and customer operations.",
-  "start_url": "/",
+  "description": "Internal Admin and Staff console for SANFAANI operations.",
+  "start_url": "/sign-in",
   "scope": "/",
   "display": "standalone",
   "theme_color": "#10151a",

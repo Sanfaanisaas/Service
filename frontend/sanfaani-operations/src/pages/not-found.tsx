@@ -14,7 +14,7 @@ export default function NotFound() {
           </div>
 
           <p className="mt-4 text-sm text-gray-600">
-            Did you forget to add the page to the router?
+            The requested page is not available in this edition of SANFAANI.
           </p>
         </CardContent>
       </Card>
