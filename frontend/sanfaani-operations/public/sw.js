@@ -19,7 +19,14 @@ self.addEventListener('fetch', (event) => {
   }
   if (['script', 'style', 'image', 'font'].includes(request.destination)) {
     event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-      if (response.ok) void caches.open(CACHE).then((cache) => cache.put(request, response.clone()));
+      if (response.ok) {
+        const cacheCopy = response.clone();
+        void caches.open(CACHE)
+          .then((cache) => cache.put(request, cacheCopy))
+          .catch(() => {
+            // Caching must not affect the network response.
+          });
+      }
       return response;
     })));
   }
