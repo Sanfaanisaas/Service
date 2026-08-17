@@ -2,12 +2,20 @@ import webpush from 'web-push';
 import { env } from '../config/env.js';
 import { Customer, PushSubscription } from '../models/index.js';
 
+let webPushConfigured = false;
+
 if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
+  try {
+    webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
+    webPushConfigured = true;
+  } catch (error) {
+    if (env.NODE_ENV === 'production') throw error;
+    console.warn('SANFAANI API: Web Push is disabled because local VAPID configuration is invalid.');
+  }
 }
 
 export async function sendCustomerPush(customerId: unknown, payload: { title: string; body: string; url: string; tag: string }) {
-  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return { sent: 0, removed: 0 };
+  if (!webPushConfigured) return { sent: 0, removed: 0 };
   const subscriptions = await PushSubscription.find({ customerId });
   let sent = 0;
   let removed = 0;
