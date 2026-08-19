@@ -31,6 +31,10 @@ pnpm build
 
 Copy the frontend and backend `env.production.example` files to untracked local `.env` files and replace placeholders. The frontend also includes `env.e2e.example` for the gitignored staging browser-test environment. See [docs/PRODUCTION.md](docs/PRODUCTION.md) for deployment, security, health checks, staging tests, and rollback.
 
+### Clearing stale local PWA state
+
+The service worker is registered only in production builds; Vite development does not register it. If a developer previously registered a local service worker, open Chromium DevTools, go to **Application → Service Workers**, choose **Unregister**, then go to **Application → Storage**, choose **Clear site data**, and hard-refresh the page. This is a one-time local debugging step, not a production-user action.
+
 ## Supported application roles
 
 - Admin: all operational modules, analytics, settings, Staff Management, and controlled role management.

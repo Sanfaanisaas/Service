@@ -19,4 +19,15 @@ describe('PWA assets', () => {
     expect(worker).toContain("addEventListener('push'");
     expect(worker).toContain("addEventListener('notificationclick'");
   });
+
+  it('clones cacheable responses before deferring cache writes', async () => {
+    const worker = await readFile(publicAsset('sw.js'), 'utf8');
+    const clone = worker.indexOf('const cacheCopy = response.clone();');
+    const cacheWrite = worker.indexOf('void caches.open(CACHE)', clone);
+
+    expect(clone).toBeGreaterThan(-1);
+    expect(cacheWrite).toBeGreaterThan(clone);
+    expect(worker).toContain('cache.put(request, cacheCopy)');
+    expect(worker).toContain('// Caching must not affect the network response.');
+  });
 });
