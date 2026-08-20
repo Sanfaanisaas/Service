@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Download, Printer, ReceiptText } from 'lucide-react';
+import { Download, MessageCircle, Printer, ReceiptText } from 'lucide-react';
 import {
   getGetReceiptDetailQueryKey,
+  getGetReceiptDeliveryQueryKey,
   useGetReceiptDetail,
+  useGetReceiptDelivery,
+  useSendReceiptWhatsApp,
   type Receipt,
+  type ReceiptDelivery,
 } from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { toast } from 'sonner';
 
@@ -72,9 +77,25 @@ async function downloadPdf(receipt: Receipt) {
 
 export default function ReceiptDetailPage({ params }: { params?: { receiptId?: string } }) {
   const receiptId = params?.receiptId ?? '';
+  const queryClient = useQueryClient();
   const query = useGetReceiptDetail(receiptId, { query: { enabled: Boolean(receiptId), queryKey: getGetReceiptDetailQueryKey(receiptId) } });
   const receipt = query.data;
   const back = '/admin/receipts';
+  const deliveryQuery = useGetReceiptDelivery(receiptId, { query: { enabled: Boolean(receiptId), queryKey: getGetReceiptDeliveryQueryKey(receiptId), refetchInterval: (queryState) => {
+    const current = queryState.state.data as ReceiptDelivery | null | undefined;
+    return current?.status === 'pending' || current?.status === 'processing' ? 15_000 : false;
+  } } });
+  const sendWhatsApp = useSendReceiptWhatsApp({
+    mutation: {
+      onSuccess: async () => {
+        toast.success('WhatsApp receipt delivery queued.');
+        await queryClient.invalidateQueries({ queryKey: getGetReceiptDeliveryQueryKey(receiptId) });
+      },
+      onError: () => toast.error('WhatsApp receipt could not be queued.'),
+    },
+  });
+  const delivery = deliveryQuery.data;
+  const deliveryLoading = deliveryQuery.isLoading || deliveryQuery.isFetching || sendWhatsApp.isPending;
 
   if (query.isLoading) return <div className="mx-auto max-w-3xl animate-pulse rounded-lg bg-muted p-16" data-testid="receipt-loading" />;
   if (query.isError || !receipt) return <div className="mx-auto max-w-3xl rounded-lg border border-destructive/40 bg-destructive/10 p-8 text-destructive">This receipt is unavailable or you do not have permission to view it. <Link href={back} className="underline">Return to receipts</Link></div>;
@@ -83,7 +104,7 @@ export default function ReceiptDetailPage({ params }: { params?: { receiptId?: s
     <div className="receipt-actions mx-auto mb-5 flex max-w-3xl flex-wrap items-center justify-between gap-3">
       <Link href={back} className="text-sm text-muted-foreground hover:text-foreground">← Back to receipts</Link>
       <div className="flex gap-2">
-        <button onClick={() => window.print()} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-4 text-xs font-bold uppercase tracking-wider"><Printer size={15} /> Print</button>
+        <button onClick={() => window.print()} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-4 text-xs font-bold uppercase tracking-wider"><Printer size={15} /> Print</button><button type="button" disabled={deliveryLoading || delivery?.status === 'sent' || delivery?.status === 'processing'} onClick={() => sendWhatsApp.mutate({ id: receiptId })} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-4 text-xs font-bold uppercase tracking-wider disabled:opacity-50" data-testid="button-send-whatsapp"><MessageCircle size={15} />{delivery?.status === 'sent' ? 'WhatsApp sent' : delivery?.status === 'failed' ? 'Retry WhatsApp' : delivery?.status === 'pending' || delivery?.status === 'processing' ? 'WhatsApp pending' : 'Send WhatsApp'}</button>
         <button onClick={() => void downloadPdf(receipt).catch(() => toast.error('The receipt PDF could not be created.'))} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-4 text-xs font-bold uppercase tracking-wider text-primary-foreground" data-testid="button-download-pdf"><Download size={15} /> Download PDF</button>
       </div>
     </div>

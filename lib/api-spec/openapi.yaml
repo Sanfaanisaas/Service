@@ -744,6 +744,35 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Receipt" }
+  /receipts/{id}/delivery:
+    get:
+      operationId: getReceiptDelivery
+      tags: [receipts]
+      summary: Get WhatsApp delivery status for one receipt
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Receipt delivery status, or null when not queued
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ReceiptDelivery"
+                  - type: "null"
+  /receipts/{id}/send-whatsapp:
+    post:
+      operationId: sendReceiptWhatsApp
+      tags: [receipts]
+      summary: Idempotently queue WhatsApp receipt delivery
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "202":
+          description: WhatsApp delivery queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReceiptWhatsAppQueueResult" }
 components:
   parameters:
     Id:
@@ -1027,6 +1056,7 @@ components:
         paymentMethod:
           type: string
           enum: [cash, transfer, card, other]
+        whatsappOptIn: { type: boolean, default: false }
     ChargingCheckInResult:
       type: object
       required: [session, receipt]
@@ -1165,6 +1195,28 @@ components:
           type: [object, "null"]
           additionalProperties: true
         generatedAt: { type: string, format: date-time }
+    ReceiptDelivery:
+      type: object
+      required: [id, receiptId, customerId, channel, destination, status, attempts, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        receiptId: { type: string }
+        customerId: { type: string }
+        channel: { type: string, enum: [whatsapp] }
+        destination: { type: string }
+        status: { type: string, enum: [pending, processing, sent, failed] }
+        attempts: { type: number }
+        providerMessageId: { type: ["string", "null"] }
+        lastErrorCode: { type: ["string", "null"] }
+        lastAttemptAt: { type: ["string", "null"], format: date-time }
+        sentAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ReceiptWhatsAppQueueResult:
+      type: object
+      required: [queued]
+      properties:
+        queued: { type: boolean }
     DashboardSummary:
       type: object
       required: [todayRevenue, charging, workspace, lowStockCount, todayCustomers, recentTransactions, readySessions, lowStockProducts]

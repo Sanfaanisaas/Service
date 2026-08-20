@@ -7,7 +7,7 @@ import {
 import { allow } from '../middleware/auth.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import {
-  AppUser, ChargingSession, Customer, InventoryMovement, Notification, Product, Receipt, Sale,
+  AppUser, ChargingSession, Customer, InventoryMovement, Notification, Product, Receipt, ReceiptDelivery, Sale,
   Setting, Transaction, WorkspaceBooking,
 } from '../models/index.js';
 import { checkIn, collect, updateStatus, verifyClaim } from '../services/charging.js';
@@ -15,6 +15,7 @@ import { createProduct, adjustStock, createSale } from '../services/inventory.js
 import { checkInWorkspace, checkOutWorkspace, registerWorkspace } from '../services/workspace.js';
 import { ACTIVE_CHARGING, ACTIVE_WORKSPACE, audit, settings } from '../services/common.js';
 import { inviteStaff } from '../services/staff.js';
+import { enqueueReceiptWhatsApp } from '../services/whatsapp.js';
 import { businessDayBounds } from '../lib/dates.js';
 
 export const operations = Router();
@@ -250,6 +251,21 @@ operations.get('/receipts/:id', staff, asyncHandler(async (req, res) => {
   const receipt = await Receipt.findOne(receiptLookup(routeParam(req.params.id)));
   if (!receipt) throw new ApiError(404, 'RECEIPT_NOT_FOUND', 'Receipt not found.');
   res.json({ success: true, data: await receiptDetail(receipt) });
+}));
+
+operations.get('/receipts/:id/delivery', staff, asyncHandler(async (req, res) => {
+  const receipt = await Receipt.findOne(receiptLookup(routeParam(req.params.id)));
+  if (!receipt) throw new ApiError(404, 'RECEIPT_NOT_FOUND', 'Receipt not found.');
+  const delivery = await ReceiptDelivery.findOne({ receiptId: receipt._id, channel: 'whatsapp' });
+  res.json({ success: true, data: delivery });
+}));
+
+operations.post('/receipts/:id/send-whatsapp', staff, asyncHandler(async (req, res) => {
+  const receipt = await Receipt.findOne(receiptLookup(routeParam(req.params.id)));
+  if (!receipt) throw new ApiError(404, 'RECEIPT_NOT_FOUND', 'Receipt not found.');
+  await enqueueReceiptWhatsApp(receipt.id);
+  await audit(req.authUser!.id, 'RECEIPT_WHATSAPP_REQUESTED', 'receipt', receipt.id);
+  res.status(202).json({ success: true, data: { queued: true } });
 }));
 
 operations.get('/notifications', staff, asyncHandler(async (req, res) => {

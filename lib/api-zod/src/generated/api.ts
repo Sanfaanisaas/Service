@@ -298,7 +298,7 @@ export const checkInChargingSessionBodyExpectedMinutesMax = 1440;
 
 export const checkInChargingSessionBodyAmountMin = 0;
 
-
+export const checkInChargingSessionBodyWhatsappOptInDefault = false;
 
 export const CheckInChargingSessionBody = zod.object({
   "customerName": zod.string().min(checkInChargingSessionBodyCustomerNameMin),
@@ -310,7 +310,8 @@ export const CheckInChargingSessionBody = zod.object({
   "description": zod.string().optional(),
   "expectedMinutes": zod.number().min(1).max(checkInChargingSessionBodyExpectedMinutesMax),
   "amount": zod.number().min(checkInChargingSessionBodyAmountMin),
-  "paymentMethod": zod.enum(['cash', 'transfer', 'card', 'other'])
+  "paymentMethod": zod.enum(['cash', 'transfer', 'card', 'other']),
+  "whatsappOptIn": zod.boolean().default(checkInChargingSessionBodyWhatsappOptInDefault)
 })
 
 export const CheckInChargingSessionResponse = zod.object({
@@ -1474,6 +1475,42 @@ export const GetReceiptDetailResponse = zod.object({
   "paymentMethod": zod.string(),
   "details": zod.record(zod.string(), zod.unknown()).nullish(),
   "generatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get WhatsApp delivery status for one receipt
+ */
+export const GetReceiptDeliveryParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetReceiptDeliveryResponse = zod.union([zod.object({
+  "id": zod.string(),
+  "receiptId": zod.string(),
+  "customerId": zod.string(),
+  "channel": zod.enum(['whatsapp']),
+  "destination": zod.string(),
+  "status": zod.enum(['pending', 'processing', 'sent', 'failed']),
+  "attempts": zod.number(),
+  "providerMessageId": zod.string().nullish(),
+  "lastErrorCode": zod.string().nullish(),
+  "lastAttemptAt": zod.coerce.date().nullish(),
+  "sentAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),zod.null()])
+
+
+/**
+ * @summary Idempotently queue WhatsApp receipt delivery
+ */
+export const SendReceiptWhatsAppParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const SendReceiptWhatsAppResponse = zod.object({
+  "queued": zod.boolean()
 })
 
 

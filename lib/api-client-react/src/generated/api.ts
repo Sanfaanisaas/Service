@@ -55,6 +55,8 @@ import type {
   PushSubscriptionState,
   PushUnsubscribeInput,
   Receipt,
+  ReceiptDelivery,
+  ReceiptWhatsAppQueueResult,
   RoleUpdateInput,
   Sale,
   SaleInput,
@@ -3504,4 +3506,152 @@ export function useGetReceiptDetail<TData = Awaited<ReturnType<typeof getReceipt
 
 
 
+
+export const getGetReceiptDeliveryUrl = (id: string,) => {
+
+
+
+
+  return `/api/receipts/${id}/delivery`
+}
+
+/**
+ * @summary Get WhatsApp delivery status for one receipt
+ */
+export const getReceiptDelivery = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<ReceiptDelivery | null> => {
+
+  return customFetch<ReceiptDelivery | null>(getGetReceiptDeliveryUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReceiptDeliveryQueryKey = (id: string,) => {
+    return [
+    `/api/receipts/${id}/delivery`
+    ] as const;
+    }
+
+
+export const getGetReceiptDeliveryQueryOptions = <TData = Awaited<ReturnType<typeof getReceiptDelivery>>, TError = ErrorType<unknown>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReceiptDelivery>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReceiptDeliveryQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReceiptDelivery>>> = ({ signal }) => getReceiptDelivery(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReceiptDelivery>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetReceiptDeliveryQueryResult = NonNullable<Awaited<ReturnType<typeof getReceiptDelivery>>>
+export type GetReceiptDeliveryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get WhatsApp delivery status for one receipt
+ */
+
+export function useGetReceiptDelivery<TData = Awaited<ReturnType<typeof getReceiptDelivery>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReceiptDelivery>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetReceiptDeliveryQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSendReceiptWhatsAppUrl = (id: string,) => {
+
+
+
+
+  return `/api/receipts/${id}/send-whatsapp`
+}
+
+/**
+ * @summary Idempotently queue WhatsApp receipt delivery
+ */
+export const sendReceiptWhatsApp = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<ReceiptWhatsAppQueueResult> => {
+
+  return customFetch<ReceiptWhatsAppQueueResult>(getSendReceiptWhatsAppUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSendReceiptWhatsAppMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendReceiptWhatsApp>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendReceiptWhatsApp>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['sendReceiptWhatsApp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendReceiptWhatsApp>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  sendReceiptWhatsApp(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendReceiptWhatsAppMutationResult = NonNullable<Awaited<ReturnType<typeof sendReceiptWhatsApp>>>
+
+    export type SendReceiptWhatsAppMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Idempotently queue WhatsApp receipt delivery
+ */
+export const useSendReceiptWhatsApp = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendReceiptWhatsApp>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendReceiptWhatsApp>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getSendReceiptWhatsAppMutationOptions(options));
+    }
 

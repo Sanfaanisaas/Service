@@ -63,8 +63,11 @@ vi.mock("@supabase/supabase-js", () => ({
 let replicaSet: MongoMemoryReplSet;
 let app: Express;
 let models: typeof import("./models/index.js");
+let serverEnv: typeof import("./config/env.js").env;
 let connectDatabase: typeof import("./lib/database.js").connectDatabase;
 let disconnectDatabase: typeof import("./lib/database.js").disconnectDatabase;
+let whatsappService: typeof import("./services/whatsapp.js");
+let receiptDocumentService: typeof import("./services/receipt-document.js");
 
 const auth = (token: keyof typeof identities) => ({
   Authorization: `Bearer ${token}`,
@@ -119,7 +122,16 @@ async function updateSettings(overrides: Record<string, number> = {}) {
   return setting;
 }
 
-function checkIn(phone: string, suffix = phone) {
+function checkIn(
+  phone: string,
+  suffix = phone,
+  overrides: Partial<{
+    customerName: string;
+    whatsappOptIn: boolean;
+    amount: number;
+    paymentMethod: "cash" | "transfer" | "card" | "other";
+  }> = {},
+) {
   return api()
     .post("/api/charging/check-in")
     .set(auth("staff"))
@@ -130,6 +142,7 @@ function checkIn(phone: string, suffix = phone) {
       expectedMinutes: 30,
       amount: 500,
       paymentMethod: "cash",
+      ...overrides,
     });
 }
 
@@ -144,9 +157,18 @@ beforeAll(async () => {
     CLIENT_URL: "http://localhost:3000",
     VAPID_PUBLIC_KEY: "",
     VAPID_PRIVATE_KEY: "",
+    WHATSAPP_ENABLED: "false",
+    WHATSAPP_GRAPH_API_VERSION: "v20.0",
+    WHATSAPP_PHONE_NUMBER_ID: "test-phone-number-id",
+    WHATSAPP_ACCESS_TOKEN: "test-access-token",
+    WHATSAPP_RECEIPT_TEMPLATE_NAME: "sanfaani_receipt",
+    WHATSAPP_RECEIPT_TEMPLATE_LANGUAGE: "en",
   });
   ({ connectDatabase, disconnectDatabase } = await import("./lib/database.js"));
+  ({ env: serverEnv } = await import("./config/env.js"));
   models = await import("./models/index.js");
+  whatsappService = await import("./services/whatsapp.js");
+  receiptDocumentService = await import("./services/receipt-document.js");
   ({ app } = await import("./app.js"));
   await connectDatabase();
   await Promise.all(Object.values(models).map((model) => model.init()));
@@ -154,6 +176,9 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await Promise.all(Object.values(models).map((model) => model.deleteMany({})));
+  serverEnv.WHATSAPP_ENABLED = false;
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   supabaseAdmin.inviteUserByEmail.mockReset();
   supabaseAdmin.deleteUser.mockReset();
   supabaseAdmin.inviteUserByEmail.mockResolvedValue({
@@ -638,6 +663,317 @@ describe("customer profile and consent", () => {
       .set(auth("customerA"))
       .expect(200);
     expect(persisted.body.data.phone).toBe("+234 800 000 0029");
+  });
+});
+
+describe("WhatsApp receipt delivery", () => {
+  it("persists explicit charging consent and queues opted-in charging receipts only", async () => {
+    await provision("staff", "staff");
+
+    const optedOut = await checkIn("08000000200", "opted-out").expect(201);
+    expect(await models.ReceiptDelivery.countDocuments()).toBe(0);
+    expect(
+      (await models.Customer.findById(optedOut.body.data.session.customerId))
+        ?.whatsappOptIn,
+    ).toBe(false);
+
+    const optedIn = await checkIn("08000000201", "opted-in", {
+      whatsappOptIn: true,
+    }).expect(201);
+
+    expect(
+      (await models.Customer.findById(optedIn.body.data.session.customerId))
+        ?.whatsappOptIn,
+    ).toBe(true);
+    expect(
+      await models.ReceiptDelivery.findOne({
+        receiptId: optedIn.body.data.receipt.id,
+        channel: "whatsapp",
+      }),
+    ).toMatchObject({
+      status: "pending",
+      attempts: 0,
+    });
+  });
+
+  it("queues opted-in paid workspace receipts and safely skips zero-value workspace registrations", async () => {
+    await provision("staff", "staff");
+
+    const paid = await api()
+      .post("/api/workspace/register")
+      .set(auth("staff"))
+      .send({
+        customerName: "Workspace WhatsApp",
+        phone: "08000000202",
+        amount: 200,
+        paymentMethod: "cash",
+        whatsappOptIn: true,
+      })
+      .expect(201);
+
+    expect(paid.body.data.receipt).toBeTruthy();
+    expect(
+      await models.ReceiptDelivery.countDocuments({
+        receiptId: paid.body.data.receipt.id,
+        channel: "whatsapp",
+      }),
+    ).toBe(1);
+
+    const free = await api()
+      .post("/api/workspace/register")
+      .set(auth("staff"))
+      .send({
+        customerName: "Workspace Free",
+        phone: "08000000203",
+        amount: 0,
+        paymentMethod: "cash",
+        whatsappOptIn: true,
+      })
+      .expect(201);
+
+    expect(free.body.data.receipt).toBeUndefined();
+    expect(
+      await models.WorkspaceBooking.countDocuments({
+        _id: free.body.data.booking.id,
+      }),
+    ).toBe(1);
+    expect(
+      await models.ReceiptDelivery.countDocuments({
+        customerId: free.body.data.booking.customerId,
+      }),
+    ).toBe(0);
+  });
+
+  it("queues opted-in existing sale customers", async () => {
+    await provision("staff", "staff");
+    const customer = await models.Customer.create({
+      name: "Sale WhatsApp",
+      phone: "08000000204",
+      whatsappOptIn: true,
+    });
+    const product = await models.Product.create({
+      sku: "WA-SALE",
+      name: "WhatsApp sale item",
+      category: "test",
+      costPrice: 50,
+      sellingPrice: 100,
+      quantityOnHand: 2,
+      reorderThreshold: 0,
+    });
+
+    const sale = await api()
+      .post("/api/sales")
+      .set(auth("staff"))
+      .send({
+        customerId: customer.id,
+        items: [{ productId: product.id, quantity: 1 }],
+        paymentMethod: "cash",
+      })
+      .expect(201);
+
+    expect(
+      await models.ReceiptDelivery.findOne({
+        receiptId: sale.body.data.receipt.id,
+        channel: "whatsapp",
+      }),
+    ).toMatchObject({
+      customerId: customer._id,
+      status: "pending",
+    });
+  });
+
+  it("keeps enqueue and manual resend idempotent and staff/admin-only", async () => {
+    await provision("admin", "admin");
+    await provision("staff", "staff");
+    await provision("customer", "customerA");
+
+    const created = await checkIn("08000000205", "manual", {
+      whatsappOptIn: true,
+    }).expect(201);
+    const receiptId = created.body.data.receipt.id;
+
+    await whatsappService.enqueueReceiptWhatsApp(receiptId);
+    await whatsappService.enqueueReceiptWhatsApp(receiptId);
+    expect(
+      await models.ReceiptDelivery.countDocuments({
+        receiptId,
+        channel: "whatsapp",
+      }),
+    ).toBe(1);
+
+    await api()
+      .get(`/api/receipts/${receiptId}/delivery`)
+      .set(auth("customerA"))
+      .expect(403);
+    await api()
+      .post(`/api/receipts/${receiptId}/send-whatsapp`)
+      .set(auth("customerA"))
+      .expect(403);
+
+    await api()
+      .get(`/api/receipts/${receiptId}/delivery`)
+      .set(auth("staff"))
+      .expect(200);
+    await api()
+      .post(`/api/receipts/${receiptId}/send-whatsapp`)
+      .set(auth("admin"))
+      .expect(202);
+    await api()
+      .post(`/api/receipts/${receiptId}/send-whatsapp`)
+      .set(auth("staff"))
+      .expect(202);
+
+    expect(
+      await models.ReceiptDelivery.countDocuments({
+        receiptId,
+        channel: "whatsapp",
+      }),
+    ).toBe(1);
+    expect(
+      await models.AuditLog.countDocuments({
+        action: "RECEIPT_WHATSAPP_REQUESTED",
+        entityId: receiptId,
+      }),
+    ).toBe(2);
+  });
+
+  it("does not call the provider while WhatsApp is disabled", async () => {
+    await provision("staff", "staff");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await checkIn("08000000206", "disabled", {
+      whatsappOptIn: true,
+    }).expect(201);
+
+    await whatsappService.processPendingReceiptDeliveries();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      await models.ReceiptDelivery.findOne({
+        receiptId: created.body.data.receipt.id,
+      }),
+    ).toMatchObject({
+      status: "pending",
+      attempts: 0,
+    });
+  });
+
+  it("records provider failure without rolling back completed operations", async () => {
+    await provision("staff", "staff");
+    serverEnv.WHATSAPP_ENABLED = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 190 } }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    const created = await checkIn("08000000207", "provider-failure", {
+      whatsappOptIn: true,
+    }).expect(201);
+
+    await whatsappService.processPendingReceiptDeliveries();
+
+    expect(
+      await models.ChargingSession.countDocuments({
+        _id: created.body.data.session.id,
+      }),
+    ).toBe(1);
+    expect(
+      await models.Transaction.countDocuments({
+        referenceId: created.body.data.session.id,
+      }),
+    ).toBe(1);
+    expect(
+      await models.Receipt.countDocuments({
+        _id: created.body.data.receipt.id,
+      }),
+    ).toBe(1);
+    expect(
+      await models.ReceiptDelivery.findOne({
+        receiptId: created.body.data.receipt.id,
+      }),
+    ).toMatchObject({
+      status: "failed",
+      attempts: 1,
+      lastErrorCode: "WHATSAPP_GRAPH_190",
+    });
+  });
+
+  it("retries stale processing deliveries and sends with mocked provider calls", async () => {
+    await provision("staff", "staff");
+    serverEnv.WHATSAPP_ENABLED = true;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "media-id" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ messages: [{ id: "wamid.test" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await checkIn("08000000208", "stale", {
+      whatsappOptIn: true,
+    }).expect(201);
+    await models.ReceiptDelivery.updateOne(
+      { receiptId: created.body.data.receipt.id },
+      {
+        status: "processing",
+        lastAttemptAt: new Date(Date.now() - 10 * 60_000),
+      },
+    );
+
+    await whatsappService.processPendingReceiptDeliveries();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      await models.ReceiptDelivery.findOne({
+        receiptId: created.body.data.receipt.id,
+      }),
+    ).toMatchObject({
+      status: "sent",
+      attempts: 1,
+      providerMessageId: "wamid.test",
+    });
+  });
+
+  it("preserves the exact secure charging QR payload in receipt detail and server PDF generation", async () => {
+    await provision("staff", "staff");
+    const QRCode = (await import("qrcode")).default;
+    const qrSpy = vi.spyOn(QRCode, "toDataURL");
+
+    const created = await checkIn("08000000209", "secure-qr", {
+      whatsappOptIn: true,
+    }).expect(201);
+    const session = await models.ChargingSession.findById(
+      created.body.data.session.id,
+    ).select("+secureClaimToken");
+    const token = session?.get("secureClaimToken") as string;
+
+    const detail = await api()
+      .get(`/api/receipts/${created.body.data.receipt.id}`)
+      .set(auth("staff"))
+      .expect(200);
+    expect(detail.body.data.claimToken).toBe(token);
+
+    await receiptDocumentService.createReceiptPdf(created.body.data.receipt.id);
+    expect(qrSpy).toHaveBeenCalledWith(
+      `sanfaani://claim/${token}`,
+      expect.objectContaining({
+        errorCorrectionLevel: "M",
+      }),
+    );
   });
 });
 

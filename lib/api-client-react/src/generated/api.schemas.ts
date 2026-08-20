@@ -377,6 +377,7 @@ export interface ChargingCheckInInput {
   /** @minimum 0 */
   amount: number;
   paymentMethod: ChargingCheckInInputPaymentMethod;
+  whatsappOptIn?: boolean;
 }
 
 export type ReceiptType = typeof ReceiptType[keyof typeof ReceiptType];
@@ -584,6 +585,47 @@ export interface Transaction {
   paymentMethod: string;
   description: string;
   createdAt: string;
+}
+
+export type ReceiptDeliveryChannel = typeof ReceiptDeliveryChannel[keyof typeof ReceiptDeliveryChannel];
+
+
+export const ReceiptDeliveryChannel = {
+  whatsapp: 'whatsapp',
+} as const;
+
+export type ReceiptDeliveryStatus = typeof ReceiptDeliveryStatus[keyof typeof ReceiptDeliveryStatus];
+
+
+export const ReceiptDeliveryStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  sent: 'sent',
+  failed: 'failed',
+} as const;
+
+export interface ReceiptDelivery {
+  id: string;
+  receiptId: string;
+  customerId: string;
+  channel: ReceiptDeliveryChannel;
+  destination: string;
+  status: ReceiptDeliveryStatus;
+  attempts: number;
+  /** @nullable */
+  providerMessageId?: string | null;
+  /** @nullable */
+  lastErrorCode?: string | null;
+  /** @nullable */
+  lastAttemptAt?: string | null;
+  /** @nullable */
+  sentAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReceiptWhatsAppQueueResult {
+  queued: boolean;
 }
 
 export type DashboardSummaryCharging = {

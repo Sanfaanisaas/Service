@@ -26,4 +26,5 @@ export interface ChargingCheckInInput {
   /** @minimum 0 */
   amount: number;
   paymentMethod: ChargingCheckInInputPaymentMethod;
+  whatsappOptIn?: boolean;
 }

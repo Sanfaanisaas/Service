@@ -31,7 +31,7 @@ app.use(
   "/api",
   rateLimit({
     windowMs: 60_000,
-    limit: 180,
+    limit: env.NODE_ENV === "test" ? 10_000 : 180,
     standardHeaders: "draft-8",
     legacyHeaders: false,
   }),

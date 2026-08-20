@@ -49,7 +49,7 @@ export const stockAdjustmentInput = z.object({
 export const chargingCheckInInput = z.object({
   customerName: z.string().trim().min(2).max(120), phone: z.string().trim().min(7).max(24),
   deviceType: z.enum(['phone', 'laptop', 'tablet', 'powerbank', 'other']),
-  brand: optionalText, model: optionalText, color: optionalText, description: optionalText,
+  brand: optionalText,whatsappOptIn: z.boolean().default(false), model: optionalText, color: optionalText, description: optionalText,
   expectedMinutes: z.coerce.number().int().min(5).max(1440),
   amount: z.coerce.number().min(0), paymentMethod: z.enum(paymentMethods),
 });

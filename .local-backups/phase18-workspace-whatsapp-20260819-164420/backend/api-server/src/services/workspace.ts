@@ -6,101 +6,35 @@ import { Customer, Notification, ResourceLock, WorkspaceBooking } from '../model
 import { ACTIVE_WORKSPACE, assertTransition, audit, customerByPhone, releasePosition, reservePosition, settings } from './common.js';
 import { generateReceipt, recordIncome } from './ledger.js';
 import { sendCustomerPush } from './push.js';
-import { enqueueReceiptWhatsApp } from './whatsapp.js';
 
 type Input = z.infer<typeof workspaceInput>;
 export async function registerWorkspace(input: Input, actorId: string) {
   const session = await mongoose.startSession();
-
   try {
-    const result = await session.withTransaction(async () => {
+    return await session.withTransaction(async () => {
       const config = await settings(session);
-      const lock = await reservePosition(
-        'workspace',
-        config.workspaceCapacity,
-        session,
-      );
-
+      const lock = await reservePosition('workspace', config.workspaceCapacity, session);
       const customer = await customerByPhone(input, session);
-
-      const [booking] = await WorkspaceBooking.create(
-        [{
-          customerId: customer._id,
-          customerName: customer.name,
-          phone: input.phone,
-          deviceInfo: input.deviceInfo,
-          seatNumber: lock.position,
-          amount: input.amount,
-          paymentMethod: input.paymentMethod,
-          status: 'registered',
-        }],
-        { session },
-      );
-
+      const [booking] = await WorkspaceBooking.create([{
+        customerId: customer._id, customerName: customer.name, phone: input.phone,
+        deviceInfo: input.deviceInfo, seatNumber: lock.position, amount: input.amount,
+        paymentMethod: input.paymentMethod, status: 'registered',
+      }], { session });
       lock.referenceId = booking._id;
       await lock.save({ session });
-
-      if (input.amount > 0) {
-        await recordIncome({
-          type: 'workspace_fee',
-          amount: input.amount,
-          paymentMethod: input.paymentMethod,
-          customerId: customer._id,
-          referenceType: 'workspace_booking',
-          referenceId: booking._id,
-          description: `Workspace fee for ${customer.name}`,
-          createdBy: actorId,
-        }, session);
-      }
-
-      const receipt = input.amount > 0
-        ? await generateReceipt({
-            type: 'workspace',
-            customerId: customer._id,
-            customerName: customer.name,
-            referenceId: booking._id,
-            total: input.amount,
-            paymentMethod: input.paymentMethod,
-            details: {
-              seatNumber: lock.position,
-            },
-          }, session)
-        : undefined;
-
-      await audit(
-        actorId,
-        'WORKSPACE_REGISTERED',
-        'workspace_booking',
-        booking.id,
-        { seatNumber: lock.position },
-        session,
-      );
-
-      return {
-        booking,
-        receipt,
-        whatsappGroupInviteUrl: config.whatsappGroupInviteUrl,
-      };
+      if (input.amount > 0) await recordIncome({
+        type: 'workspace_fee', amount: input.amount, paymentMethod: input.paymentMethod,
+        customerId: customer._id, referenceType: 'workspace_booking', referenceId: booking._id,
+        description: `Workspace fee for ${customer.name}`, createdBy: actorId,
+      }, session);
+      const receipt = input.amount > 0 ? await generateReceipt({
+        type: 'workspace', customerId: customer._id, customerName: customer.name, referenceId: booking._id,
+        total: input.amount, paymentMethod: input.paymentMethod, details: { seatNumber: lock.position },
+      }, session) : undefined;
+      await audit(actorId, 'WORKSPACE_REGISTERED', 'workspace_booking', booking.id, { seatNumber: lock.position }, session);
+      return { booking, receipt, whatsappGroupInviteUrl: config.whatsappGroupInviteUrl };
     });
-
-    /*
-     * WhatsApp is an external side effect.
-     * Queue only after the MongoDB transaction has committed.
-     */
-    if (result.receipt) {
-      try {
-        await enqueueReceiptWhatsApp(result.receipt.id);
-      } catch {
-        console.error(
-          'Could not queue workspace receipt WhatsApp delivery.',
-        );
-      }
-    }
-
-    return result;
-  } finally {
-    await session.endSession();
-  }
+  } finally { await session.endSession(); }
 }
 export async function checkInWorkspace(id: string, actorId: string) {
   const booking = await WorkspaceBooking.findById(id);
