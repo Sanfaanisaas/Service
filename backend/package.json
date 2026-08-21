@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "pnpm --filter \"./**\" --parallel run dev",
     "build": "pnpm --filter \"./**\" run build",
+    "start": "pnpm --filter \"@workspace/api-server\" run start",
     "typecheck": "pnpm --filter \"./**\" run typecheck"
   },
   "dependencies": {}
